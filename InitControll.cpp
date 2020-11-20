@@ -3,7 +3,7 @@
 
 int chooseService()
 {
-	int choice;
+	char choice;
 	std::cout << "Vyber mod, v ktorom chcete pracovat (reciever\sender)\n[r\s] ";
 	std::cin >> choice;
 	

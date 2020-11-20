@@ -1,7 +1,9 @@
 #include<iostream>
 #include<WinSock2.h>
 #include"InitControll.h"
+#include"Sender.h"
 
+#pragma comment(lib, "Ws2_32.lib") // alebo zmenit v konfiguraciach
 
 int main(int argc, char **argv) {
 
@@ -12,7 +14,7 @@ int main(int argc, char **argv) {
 
 	
 
-	std::cout << "Spustit ako : [sender(s) reciever(r)]" << std::endl;
+	std::cout << "Spustit ako : [sender(s) / reciever(r)]" << std::endl;
 	
 	for (val = BAD_INPUT; val == BAD_INPUT; val = chooseService());
 
@@ -29,12 +31,11 @@ int main(int argc, char **argv) {
 		
 		IPv4_ADDR  IP_addr;
 
-		for(IP_addr = INADDR_NONE; IP_addr == INADDR_NONE; IP_addr = inet_addr(loadIP().c_str()));  //TODO : skontroluj riadne to nacitavanie
+		//for(IP_addr = INADDR_NONE; IP_addr == INADDR_NONE; IP_addr = inet_addr(loadIP().c_str()));  //TODO : skontroluj riadne to nacitavanie
 
-
+		Sender client = CLIENT_INIT(555, 1024);
 		
-		
-
+		client.wakeUp();
 		
 	}
 }
