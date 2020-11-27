@@ -36,12 +36,24 @@
     <ClCompile Include="Sender.cpp">
       <Filter>Source Files\Sender</Filter>
     </ClCompile>
+    <ClCompile Include="Reciever.cpp">
+      <Filter>Source Files\Reciever</Filter>
+    </ClCompile>
+    <ClCompile Include="Protocol.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="InitControll.h">
       <Filter>Header Files\Headers</Filter>
     </ClInclude>
     <ClInclude Include="Sender.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Reciever.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Protocol.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
