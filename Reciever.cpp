@@ -47,11 +47,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in host) {
 
             printf("Received packet from %s:%d\n", inet_ntoa(host.sin_addr), ntohs(host.sin_port));
             
-            printf("Data: %d", protocol.data_len);
-            //printf("Data: %s\n", buffer);
-
-
-
+            printf("Data: %s", buffer);
 
         }
 

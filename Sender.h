@@ -15,7 +15,7 @@ class Sender
 			port = _port;
 			alive = true;
 			
-
+			fragment = 512;
 			hostsockaddr.sin_family = AF_INET; // mozno len ipv4
 			hostsockaddr.sin_port = htons(_port);
 			hostsockaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
@@ -29,6 +29,7 @@ class Sender
 		struct sockaddr_in hostsockaddr;
 
 		int port;
+		unsigned short fragment;
 		static constexpr int maxFragment = 512;
 		unsigned long ip;
 		static int sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket);

@@ -12,24 +12,38 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
 {
     int len = message.length();
     int result;
-    struct fragment *stream = NULL;
+    struct fragment stream;
+    ZeroMemory(&stream, sizeof(stream));
 
-    if (len > fragmentLen) {
-        stream = fragmentMessage(stream, len, (char*)message.c_str(), fragmentLen);
+    if ((len+1) + HEADER_12 > fragmentLen) {
 
-        while (stream) {
-            if (result = sendto(connectionSocket, stream->data, stream->header.dataLength, 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
+        stream.header.flags.fragmented = 1;
+        stream.header.type.len = 3;
+        stream.header.type.text = 1;
+       
+        fragmentMessage(stream, len+1, (char*)message.c_str(), fragmentLen);
 
+        while (stream.next) {
+            
+            if (result = sendto(connectionSocket, stream.data, (stream.header.dataLength + stream.header.type.len*4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
+                
+                std::cout << "Client :fragment send error" << std::endl;
 
             }
-            
-             
-
-            stream = stream->next;
+        
+            stream = *stream.next;
         }
 
     }
     else {
+
+        if (result = sendto(connectionSocket, stream.data, (stream.header.dataLength + stream.header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
+
+            struct fragment messageHeader; 
+
+            std::cout << "Client :fragment send error" << std::endl;
+
+        }
 
     }
     return 0;
@@ -100,6 +114,8 @@ void Sender::run()
 {
     int _resullt = 0;
 
+
+
     const char * message = "this is a mesage that i want to send bla bah blah baaa je tiooto skoro koniec uzz teraz fakt. tu :D";
     char recieveBuffer[512];
 
@@ -120,12 +136,10 @@ void Sender::run()
         return;
     }
     
-   // _resullt = connect(connectionSocket, (sockaddr *)&hostsockaddr.sin_addr, sizeof(hostsockaddr));
-
-    while (true) {
+     while (true) {
         char choice;
 
-        std::cout << "help : [t] (text message) [f] (file) [e] (shutdown)" << std::endl;
+        std::cout << "help : [t] (text message) [f] (file) [e] (shutdown) [l] (nastav velkost fragmentu)" << std::endl;
         std::cin >> choice;
         std::string msg;
 
@@ -133,17 +147,22 @@ void Sender::run()
             case 't':
                 std::cout << "Message : ";
                 std::cin >> msg;
-                _resullt = sendMessage(msg, 32, hostsockaddr, connectionSocket);
+                _resullt = sendMessage(msg, fragment, hostsockaddr, connectionSocket);
                 break;
             case 'f' :
 
                 break;
+            case 'l':
+                std::cin >> fragment;
+                break;
 
         }
 
+        if (_resullt == SOCKET_ERROR) {
+            std::cout << "Error : client is shutting down" << std::endl;
+        }
 
-
-    }
+     }
 
   //send the message
     if (sendto(connectionSocket, message, strlen(message), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR)

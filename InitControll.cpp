@@ -4,6 +4,16 @@
 #include <windows.h>
 
 
+void confirm()
+{
+}
+
+void analyzeHeader(Protocol& header, char* data)
+{
+
+
+}
+
 int chooseService()
 {
 	char choice;
@@ -105,51 +115,51 @@ void copyHeader(char* data, Protocol header) {
     return;
 }
 
-struct fragment* fragmentMessage(struct fragment *message, int length, char* data, int fragmentLength) {
+void fragmentMessage( fragment &message, int length, char* data, int fragmentLength) {
 
-    struct fragment* ptr = NULL;
+    fragment* ptr = NULL;
+    Protocol reference = message.header;
+
+    ptr = &message;
     
-    ptr = new struct fragment;
-    message = ptr;
-    for (int packed = 0, fragment = 0; packed <= length; packed += fragmentLength, fragment++) {
+    for (int packed = 0, fragments = 0; packed <= length; packed += (fragmentLength - HEADER_12), fragments++) {
 
         ZeroMemory(&ptr->header, sizeof(header));
         int size = 0;
 
-        if ((length - packed) >= fragmentLength)
+        ptr->header = reference;
+
+        if ((length - packed) >= fragmentLength - HEADER_12)
             size = fragmentLength - HEADER_12;
         else {
-            size = length - packed - HEADER_12;
+            size = length - packed ;
             ptr->header.type.control = 1;
             ptr->header.flags.quit = 1;
         }
 
-        ptr->data = new char[size];
+        ptr->data = new char[fragmentLength];
 
-        if (!fragment) {
+        if (!fragments) {
             ptr->header.flags.init = 1;
             ptr->header.type.control = 1;
         }
 
-        ptr->header.type.len = 3;
-        ptr->header.flags.fragmented = 1;
-        ptr->header.type.text = 1;
         ptr->header.checksum = crc(data);
         ptr->header.dataLength = size;
-        ptr->header.sequenceNumber = fragment;
-        ptr->next = new struct fragment;
+        ptr->header.sequenceNumber = fragments;
+        ptr->next = new fragment;
 
         copyHeader(ptr->data, ptr->header);
 
         std::copy_n(data, size, ptr->data + HEADER_12);
         data += size;
+ 
         ptr = ptr->next;
-
+        
 
     }
-    ptr = NULL;
+    ZeroMemory(ptr, sizeof(struct fragment));
 
-    return message;
 }
 
 unsigned short crc(char* data){
