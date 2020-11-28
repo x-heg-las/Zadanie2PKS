@@ -4,6 +4,13 @@
 #include <windows.h>
 
 
+char* arq(header &protocol, Protocol data)
+{
+    if (protocol.flags.retry) {
+        
+    }
+}
+
 void confirm()
 {
 }
@@ -11,7 +18,7 @@ void confirm()
 void analyzeHeader(Protocol& header, char* data)
 {
 
-
+    
 }
 
 int chooseService()

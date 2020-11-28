@@ -19,6 +19,7 @@ struct recievedFragments {
 
 };
 
+char* arq(header protocol, Protocol data);
 void confirm();
 void analyzeHeader(Protocol& header, char* data);
 int chooseService();

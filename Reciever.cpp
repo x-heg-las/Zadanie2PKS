@@ -1,53 +1,70 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 
 #include "Reciever.h"
+#include "InitControll.h"
 #include "Protocol.h"
 #include <WinSock2.h>
+#include <Windows.h>
 #include <thread>
 #include <fstream>
 #include <iostream>
 
 #pragma comment(lib,"ws2_32.lib")
 
-int fragmentLength;
+void reply(sockaddr_in host, sockaddr_in server, char* data) {
 
-struct header analyzeHeader(char* buffer) {
+    header protocol;
+    analyzeHeader(protocol, data);
 
-    struct header protocol;
+    unsigned short sum = crc(data);
+    SOCKET client = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
-    protocol = *(struct header*)buffer;
 
-    fragmentLength = protocol.data_len;
 
-    return protocol;
+    if (!sum) {
+        sendto(client, , HEADER_8, 0, (sockaddr*)&host, sizeof(host));
+    }
 }
 
-void recieve(SOCKET listenSocket, struct sockaddr_in host) {
+void analyzeHeader(header &protocol, char* buffer) {
+
+    ZeroMemory(&protocol, sizeof(protocol));
+    
+    protocol = *(header*)buffer;
+
+
+    return;
+}
+
+void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
     char buffer[512];
-    int slen = sizeof(host);
+    int slen ;
 
     std::ofstream fileOut;    
-    
+    int c = 0;
+
+    sockaddr_in host;
+    slen = sizeof(host);
+    header protocol ;
+
+
     while (true) {
 
-        ZeroMemory(&buffer, 512);
+
+     
+
+        ZeroMemory(&buffer, sizeof(512));
 
         if ((recvfrom(listenSocket, (char*)buffer, 512, 0, (struct sockaddr*)&host, &slen)) == SOCKET_ERROR) {
 
-            std::cout << "Error : recv failed.. shutting down!";
+            std::cout << "Server : connection lost";
             return;
         }
         else {
 
-            struct header protocol = analyzeHeader(buffer);
-
-
-            
-
             printf("Received packet from %s:%d\n", inet_ntoa(host.sin_addr), ntohs(host.sin_port));
-            
-            printf("Data: %s", buffer);
+            analyzeHeader(protocol, buffer);
 
         }
 
@@ -129,7 +146,7 @@ void Reciever::run() {
     SOCKET listenSocket = INVALID_SOCKET;
     SOCKET clientSocket = INVALID_SOCKET;
 
-    unsigned char buffer[512];
+    char buffer[512];
     int slen, recieved_len;
 
     struct sockaddr_in host;
@@ -144,29 +161,21 @@ void Reciever::run() {
         std::cout << "ERROR : bind error !!" << std::endl;
     }
 
-
-
     std::cout << "Server : Waiting for transfer..." << std::endl;
-    while (true) {
+    std::thread recieving(&recieve, listenSocket, host);
+    
+    
+    while (alive) {
+        int input;
+        std::cin >> input;
 
-        ZeroMemory(&buffer, sizeof(512));
-
-        if ((recvfrom(listenSocket, (char*)buffer, 512, 0, (struct sockaddr*)&host, &slen)) == SOCKET_ERROR) {
-
-            std::cout << "Error : recv failed";
-            return;
-        }
-        else {
-
-            printf("Received packet from %s:%d\n", inet_ntoa(host.sin_addr), ntohs(host.sin_port));
-            printf("Data: %s\n", buffer);
-        }
-
-
-
-
+        if (input == 0)
+            alive = false;
     }
-
+    
+    if (recieving.joinable())
+        closesocket(listenSocket);
+        recieving.join();
 
     if (listenSocket == INVALID_SOCKET) {
         printf("Error : at socket(): %ld\n", WSAGetLastError());

@@ -7,6 +7,7 @@ class Reciever
 public:
 	Reciever(unsigned short port) {
 
+		alive = true;
 		socketi.sin_family = AF_INET;
 		socketi.sin_port = htons(port);
 		socketi.sin_addr.s_addr = inet_addr("127.0.0.1");

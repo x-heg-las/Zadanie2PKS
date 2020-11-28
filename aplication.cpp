@@ -3,8 +3,11 @@
 #include<iostream>
 #include<WinSock2.h>
 #include"InitControll.h"
+#include <thread>
 #include"Sender.h"
+#include <atomic>
 #include "Reciever.h"
+
 
 #pragma comment(lib, "Ws2_32.lib") // alebo zmenit v konfiguraciach
 
@@ -12,8 +15,6 @@ int main(int argc, char **argv) {
 
 	int port;
 	char val;
-	SOCKET socket;
-	SOCKADDR_IN recieverAddress;
 
 	std::cout << "Spustit ako : [sender(s) / reciever(r)]" << std::endl;
 	
@@ -23,11 +24,17 @@ int main(int argc, char **argv) {
 	if (val == RECIEVER) 
 	{
 	
+
+
 		Reciever server = Reciever(48514);
 
 		server.wakeUp();
 		server.run();
 
+
+
+
+	
 
 	}
 	else if (val == SENDER) 
@@ -45,4 +52,8 @@ int main(int argc, char **argv) {
 		client.run();
 		
 	}
+
+
+	
+	return 0;
 }
