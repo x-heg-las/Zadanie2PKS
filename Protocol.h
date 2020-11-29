@@ -34,8 +34,9 @@ typedef struct {
 struct header {
 	FLAGS flags;
 	TYPE type;
-	unsigned char data_len;
-	unsigned char stream;
+	unsigned short chcecksum;
+	unsigned short data_len;
+	unsigned short stream;
 	int seq;
 };
 

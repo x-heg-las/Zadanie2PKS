@@ -6,7 +6,9 @@
 #include <string>
 #include "InitControll.h"
 
+void recieveMessage(){
 
+}
 
 int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket)
 {
@@ -155,6 +157,10 @@ void Sender::run()
             case 'l':
                 std::cin >> fragment;
                 break;
+            case 'e':
+                closesocket(connectionSocket);
+                std::cout << "Client : client is shutting downn" << std::endl;
+                return;
 
         }
 

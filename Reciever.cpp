@@ -7,6 +7,7 @@
 #include <Windows.h>
 #include <thread>
 #include <fstream>
+#include <vector>
 #include <iostream>
 
 #pragma comment(lib,"ws2_32.lib")
@@ -20,20 +21,16 @@ void reply(sockaddr_in host, sockaddr_in server, char* data) {
     SOCKET client = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
 
-
     if (!sum) {
-        sendto(client, , HEADER_8, 0, (sockaddr*)&host, sizeof(host));
+        ZeroMemory(&protocol, sizeof(protocol));
+        protocol.flags.ack = 1;
+        sendto(client, arq(protocol, protocol.data_len), HEADER_8, 0, (sockaddr*)&host, sizeof(host));
     }
-}
-
-void analyzeHeader(header &protocol, char* buffer) {
-
-    ZeroMemory(&protocol, sizeof(protocol));
-    
-    protocol = *(header*)buffer;
-
-
-    return;
+    else {
+        ZeroMemory(&protocol, sizeof(protocol));
+        protocol.flags.retry = 1;
+        sendto(client, arq(protocol, protocol.data_len), HEADER_8, 0, (sockaddr*)&host, sizeof(host));
+    }
 }
 
 void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
@@ -46,13 +43,16 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
     sockaddr_in host;
     slen = sizeof(host);
-    header protocol ;
+    header protocol, reference;
+    message transfered;
+    stream* dataFlow;
 
-
+    message* ptr = &transfered;
+    stream* streamptr = dataFlow;
+    std::vector<Stream> streams; 
+    std::vector<Stream>::iterator it;
+    ZeroMemory(&dataFlow, sizeof(dataFlow));
     while (true) {
-
-
-     
 
         ZeroMemory(&buffer, sizeof(512));
 
@@ -62,9 +62,99 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
             return;
         }
         else {
-
+            
+            reply(host, host, buffer);
             printf("Received packet from %s:%d\n", inet_ntoa(host.sin_addr), ntohs(host.sin_port));
+
             analyzeHeader(protocol, buffer);
+
+            if (protocol.flags.init) {
+                ptr = &transfered;
+                reference = protocol;
+                Stream incoming = Stream(reference.stream, 0);
+                streams.push_back(incoming);
+            }
+
+
+            if (!protocol.flags.quit) {
+                
+
+               
+                //ptr->data = new char[protocol.data_len];
+                //memcpy(ptr->data, buffer + protocol.type.len * 4, protocol.data_len);
+                //ptr->offset = protocol.seq;
+                //ptr->stream = protocol.stream;
+
+
+
+
+                if (protocol.flags.name) {
+                    int namelen = strlen(ptr->data);
+                  //  ptr->data += namelen + 1;
+                    //ptr->len = protocol.data_len - (namelen + 1);
+                    Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len - (namelen + 1), protocol.seq);
+                    fragment.data += namelen + 1;
+                    std::find_if(streams.begin(),
+                                 streams.end(),
+                                 [&var = protocol.seq, &frg = fragment]
+                                 (Stream& s) -> void { if (s.streamnumber == var) { s.addFragment(frg); }  });
+                    
+                    
+                    
+                }
+                else {
+                    Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len , protocol.seq);
+                    //ptr->len = protocol.data_len;
+                    std::find_if(streams.begin(),
+                                 streams.end(),
+                                 [&var = protocol.seq, &frg = fragment]
+                                 (Stream& s) -> void { if (s.streamnumber == var) { s.addFragment(frg); }  });
+
+                }
+                
+            }
+            else { // toto sa da upravit na menej kodu 
+
+                if (protocol.flags.name) {
+                    int namelen = strlen(ptr->data);
+                    //  ptr->data += namelen + 1;
+                      //ptr->len = protocol.data_len - (namelen + 1);
+                    Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len - (namelen + 1), protocol.seq);
+                    fragment.data += namelen + 1;
+                    std::find_if(streams.begin(),
+                        streams.end(),
+                        [&var = protocol.seq, &frg = fragment]
+                    (Stream& s) -> void { if (s.streamnumber == var) { s.addFragment(frg); }  });
+
+
+
+                }
+                else {
+                    Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq);
+                    //ptr->len = protocol.data_len;
+                    std::find_if(streams.begin(),
+                        streams.end(),
+                        [&var = protocol.seq, &frg = fragment]
+                    (Stream& s) -> void { if (s.streamnumber == var) { s.addFragment(frg); }  });
+
+                }
+
+
+                //////// toto oprav na zrozumitelnejsie ////////
+
+
+                if (reference.type.text) {
+
+                    ZeroMemory(buffer, 512);
+                    concat(&dataFlow, protocol.stream, buffer);
+                    std::cout << buffer << std::endl;
+                                 
+                    //      freebuff
+                }
+            }
+
+
+            ptr = ptr->next;
 
         }
 

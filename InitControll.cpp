@@ -1,25 +1,64 @@
 #include "InitControll.h"
+#include "Protocol.h"
 #include <iostream>
 #include <algorithm>
 #include <windows.h>
 
 
-char* arq(header &protocol, Protocol data)
+void concat(stream *data, int id, char *buffer)
+{
+    while (data && data->streamNumber != id) data = data->next;
+    
+    if (!data)
+        return;
+        
+    int offset = 0;
+
+    message* ptr = data->data;
+    header protocol;
+
+    if (!check(*ptr)) {
+        
+        std::cout << "Server : Chyba v InitControl;" << std::endl;
+        return;
+    }
+        
+
+    while (ptr) {
+
+        memcpy((buffer) + offset, ptr->data, ptr->len);
+        offset += ptr->len;
+        ptr = ptr->next;
+    }
+
+
+    return;
+}
+
+char* arq(header &protocol, int len)
 {
     if (protocol.flags.retry) {
-        
+        protocol.data_len = 0;
+        protocol.flags.retry = 1;
+        protocol.seq = len;
+        protocol.type.len = 2;
+        protocol.type.control = 1;
     }
-}
-
-void confirm()
-{
-}
-
-void analyzeHeader(Protocol& header, char* data)
-{
-
+    else {
+        protocol.data_len = 0;
+        protocol.flags.ack = 1;
+        protocol.seq = len;
+        protocol.type.len = 2;
+        protocol.type.control = 1;
+    }
     
+    char *msg = new char[HEADER_8];
+    
+    memcpy(msg, &protocol, len);
+
+    return msg;
 }
+
 
 int chooseService()
 {
@@ -83,6 +122,43 @@ std::string getFilename()
     
 	return "Failure !!!!" ;
 }
+/*
+void freebuffer(stream *data)
+{
+    stream* ptr = data;
+    while (ptr) {
+        stream* prew = ptr;
+        ptr = ptr->next;
+        delete prew;
+    }
+    delete data;
+
+}
+*/
+void analyzeHeader(header& protocol, char* buffer) {
+
+    ZeroMemory(&protocol, sizeof(protocol));
+
+    protocol = *(header*)buffer;
+
+
+    return;
+}
+
+bool check(message stream)
+{
+    message* ptr = &stream;
+
+    int offset = 0;
+    while (ptr) {
+        if (ptr->offset != offset)
+            return false;
+        ptr = ptr->next;
+        offset++;
+    }
+    return true;
+}
+
 
 std::string loadIP()
 {
