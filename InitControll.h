@@ -39,18 +39,26 @@ struct stream {
 class Message {
 
 	public:
-		Message(char* _data, short datalen, int offset) {
+		Message(char* _data, short datalen, int _offset) {
 
-			data = new char[datalen];
+			data = new char[datalen+1];
 			memcpy(data ,_data, datalen);
 			len = datalen;
-			int offset;
+			offset = _offset;
 		}
 		
 		~Message() {
-			delete[] data;
+			delete [] data;
 		}
 		
+		Message(const Message& mes) {
+			data = new char[mes.len];
+			memcpy(data, mes.data, mes.len);
+			len = mes.len;
+			offset = mes.offset;
+
+		}
+
 		char* data;
 		int offset;
 		short len;
@@ -73,19 +81,20 @@ class Stream {
 		char finished;
 
 		void addFragment(Message msg) {
-			fragments.push_back(msg);
+			fragments.insert(fragments.begin() + msg.offset, msg);
+			///fragments.push_back(msg);
 		}
 };
 
 void freebuffer(stream data);
 void analyzeHeader(header& protocol, char *buffer);
 bool check(message stream);
-void concat(stream* data, int id, char* buffer);
+void concat(std::vector<Stream>& streams, int id, char* buffer);
 char* arq(header &protocol, int len);
 void confirm();
 int chooseService();
 std::string getFilename();
 std::string loadIP();
-void fragmentMessage(fragment &message, int length, char* data, int fragmentLength);
+void fragmentMessage(fragment &message, int length, char* data, int fragmentLength, int type);
 
 unsigned short crc(char* data);

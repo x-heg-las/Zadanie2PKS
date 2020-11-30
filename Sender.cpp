@@ -3,27 +3,76 @@
 #include <iostream>
 #include <thread>
 #include "Protocol.h"
+#include <windows.h>
 #include <string>
 #include "InitControll.h"
+#include <fstream>
+#include <string.h>
 
 void recieveMessage(){
 
 }
 
-int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket)
+int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket)
+{
+
+    std::ifstream fileInput(filePath, std::ifstream::out | std::ifstream::binary);
+
+    struct fragment stream;
+    fileInput.seekg(0, fileInput.end);
+    int fileSize = fileInput.tellg() , result = SOCKET_ERROR;
+    fileInput.seekg(0, fileInput.beg);
+
+    ZeroMemory(&stream, sizeof(stream));
+    char* fileBuffer = new char[fileSize + MAX_PATH];
+    ZeroMemory(fileBuffer, fileSize + MAX_PATH);
+
+    std::string fileName = filePath.substr(filePath.find_last_of("/\\") + 1);
+    
+    memcpy(fileBuffer, fileName.c_str(), fileName.length() + 1);
+   
+    if (fileSize + HEADER_8 > fragmentLen) {
+        
+        stream.header.flags.fragmented = 1;
+        stream.header.type.len = 3;
+        stream.header.type.binary = 1;
+    }
+    else {
+        stream.header.type.len = 2;
+        stream.header.type.binary = 1;
+    }
+
+
+    fileInput.read(fileBuffer + fileName.length() + 1, static_cast<std::streamsize>(fragmentLen) - stream.header.type.len * 4);
+
+    fragmentMessage(stream, fileSize, fileBuffer, fragmentLen, FILE);
+
+    while (stream.next) {
+
+        if (result = sendto(connectionSocket, stream.data, (stream.header.dataLength + stream.header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
+        
+            std::cout << "Client : Failed to send data" << std::endl;
+        }
+
+        stream = *stream.next;
+    }
+    // este neak uvolnovanie dat zabezpeciit 
+    return 1;
+}
+int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int type) // type nemusi byt
 {
     int len = message.length();
     int result;
     struct fragment stream;
     ZeroMemory(&stream, sizeof(stream));
 
-    if ((len+1) + HEADER_12 > fragmentLen) {
+    if ((len+1) + HEADER_8 > fragmentLen) {
 
         stream.header.flags.fragmented = 1;
         stream.header.type.len = 3;
         stream.header.type.text = 1;
        
-        fragmentMessage(stream, len+1, (char*)message.c_str(), fragmentLen);
+        fragmentMessage(stream, len+1, (char*)message.c_str(), fragmentLen, TEXT);
 
         while (stream.next) {
             
@@ -35,10 +84,12 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
         
             stream = *stream.next;
         }
-
+        // spoj do jedneho prikzu
     }
     else {
-
+        stream.header.type.len = 2;
+        stream.header.type.text = 1;
+        fragmentMessage(stream, len + 1, (char*)message.c_str(), fragmentLen, type);
         if (result = sendto(connectionSocket, stream.data, (stream.header.dataLength + stream.header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
 
             struct fragment messageHeader; 
@@ -50,6 +101,9 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
     }
     return 0;
 }
+
+
+
 
 void Sender::wakeUp()
 {
@@ -143,15 +197,19 @@ void Sender::run()
 
         std::cout << "help : [t] (text message) [f] (file) [e] (shutdown) [l] (nastav velkost fragmentu)" << std::endl;
         std::cin >> choice;
-        std::string msg;
+        std::string msg, filename;
 
         switch (choice) {
             case 't':
                 std::cout << "Message : ";
                 std::cin >> msg;
-                _resullt = sendMessage(msg, fragment, hostsockaddr, connectionSocket);
+                _resullt = sendMessage(msg, fragment, hostsockaddr, connectionSocket, TEXT);
                 break;
             case 'f' :
+                filename = getFilename();
+             
+                _resullt = sendFile(filename, fragment, hostsockaddr, connectionSocket);
+               
 
                 break;
             case 'l':

@@ -2,6 +2,10 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <WinSock2.h>
 #include <string>
+#include <fstream>
+
+#define FILE 1
+#define TEXT 2
 
 #define CLIENT_INIT(address, port ) \
   Sender( address, port)
@@ -32,7 +36,8 @@ class Sender
 		unsigned short fragment;
 		static constexpr int maxFragment = 512;
 		unsigned long ip;
-		static int sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket);
+		static int sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int type);
+		static int sendFile(std::string fileName, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket);
 		void wakeUp();
 		void run();
 		void cleanup();

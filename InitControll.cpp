@@ -1,36 +1,80 @@
 #include "InitControll.h"
 #include "Protocol.h"
 #include <iostream>
+#include <vector>
 #include <algorithm>
 #include <windows.h>
 
 
-void concat(stream *data, int id, char *buffer)
+void concat(std::vector<Stream> &streams, int id, char *buffer)
 {
-    while (data && data->streamNumber != id) data = data->next;
-    
-    if (!data)
-        return;
-        
-    int offset = 0;
+   
+   /*
+   std::find_if(streams.begin(),
+        streams.end(),
+        [&var = id, &stream = s, &con = confirmed]
+   (Stream& s) -> bool { if (s.streamnumber == var) { s = *stream; con = true;  return true;
+   }return false;  });
+   */
+    int cnt = 0;
+   for (Stream& flow : streams) {
+       if (flow.streamnumber == id) {
+           /*
+           std::sort(
+               flow.fragments.begin(), flow.fragments.end(),
+               [] (const Message &a,const Message &b) -> bool {
+                   return a.offset < b.offset;
+               }
+           );
+           */
 
-    message* ptr = data->data;
-    header protocol;
+           int offset = 0;
 
+           int iter = 0;
+
+           for (Message& mes : flow.fragments) {
+               if (mes.offset != iter)
+                   return;
+               iter++;
+           }
+
+
+           for (Message& mes : flow.fragments) {
+
+               memcpy((buffer)+offset, mes.data, mes.len);
+               offset += mes.len;
+           }
+           streams.erase(streams.begin() + cnt);
+           break;
+       }
+       cnt++;
+    }
+
+    //int offset = 0;
+
+    /*
     if (!check(*ptr)) {
         
         std::cout << "Server : Chyba v InitControl;" << std::endl;
         return;
     }
+    
+
+    int iter = 0;
+
+    for (Message& mes : s->fragments) {
+        if (mes.offset != iter)
+            return;
+        iter++;
+    }
         
 
-    while (ptr) {
+    for (Message& mes : s->fragments) {
 
-        memcpy((buffer) + offset, ptr->data, ptr->len);
-        offset += ptr->len;
-        ptr = ptr->next;
+        memcpy((buffer) + offset, mes.data, mes.len);
+        offset += mes.len;
     }
-
+    */
 
     return;
 }
@@ -62,14 +106,14 @@ char* arq(header &protocol, int len)
 
 int chooseService()
 {
-	char choice;
-	std::cout << "Vyber mod, v ktorom chcete pracovat (reciever\sender)\n[r/s] ";
-	std::cin >> choice;
-	
-	if (choice == SENDER || choice == RECIEVER)
-		return choice;
+    char choice;
+    std::cout << "Vyber mod, v ktorom chcete pracovat (reciever\sender)\n[r/s] ";
+    std::cin >> choice;
+    
+    if (choice == SENDER || choice == RECIEVER)
+        return choice;
 
-	return BAD_INPUT;
+    return BAD_INPUT;
 }
 
 std::string getFilename()
@@ -120,7 +164,7 @@ std::string getFilename()
             }
         }
     
-	return "Failure !!!!" ;
+    return "" ;
 }
 /*
 void freebuffer(stream *data)
@@ -140,7 +184,13 @@ void analyzeHeader(header& protocol, char* buffer) {
     ZeroMemory(&protocol, sizeof(protocol));
 
     protocol = *(header*)buffer;
-
+    
+    if (protocol.type.len == 2)
+        protocol.seq = 0;
+    if (protocol.type.len < 2) {
+        protocol.data_len = 0;
+        protocol.stream = 0;
+    }
 
     return;
 }
@@ -163,12 +213,12 @@ bool check(message stream)
 std::string loadIP()
 {
 
-	std::string input;
-	std::cout << "Zadaj IP adresu prijmacieho zariadenia s pouzitim \".\" notacie . (x.x.x.x)" << std::endl;
+    std::string input;
+    std::cout << "Zadaj IP adresu prijmacieho zariadenia s pouzitim \".\" notacie . (x.x.x.x)" << std::endl;
 
-	std::cin >> input;
+    std::cin >> input;
 
-	return input;
+    return input;
 }
 
 void copyHeader(char* data, Protocol header) {
@@ -180,14 +230,14 @@ void copyHeader(char* data, Protocol header) {
     //std::copy_n(&header.checksum, 2, data + 1);
     memcpy(data , &header.checksum, 2);
     
-    if (header.type.len > 1) {
+    if (header.type.len >= 1) {
         //std::copy_n(&header.dataLength, 2, data + 2);
         data += 2;
         memcpy(data, &header.dataLength,  2);
         //std::copy_n(&header.streamNumber, 2, data + 2);
         data += 2;
         memcpy(data, &header.streamNumber,  2);
-        if(header.type.len > 2){
+        if(header.type.len >= 2){
             //std::copy_n(&header.sequenceNumber, 4, data + 2);
             data += 2;
             memcpy(data , &header.sequenceNumber,  4);
@@ -198,22 +248,22 @@ void copyHeader(char* data, Protocol header) {
     return;
 }
 
-void fragmentMessage( fragment &message, int length, char* data, int fragmentLength) {
+void fragmentMessage( fragment &message, int length, char* data, int fragmentLength, int type) {
 
     fragment* ptr = NULL;
     Protocol reference = message.header;
 
     ptr = &message;
     
-    for (int packed = 0, fragments = 0; packed <= length; packed += (fragmentLength - HEADER_12), fragments++) {
+    for (int packed = 0, fragments = 0; packed <= length; packed += (fragmentLength - reference.type.len * 4), fragments++) {
 
         ZeroMemory(&ptr->header, sizeof(header));
         int size = 0;
 
         ptr->header = reference;
 
-        if ((length - packed) >= fragmentLength - HEADER_12)
-            size = fragmentLength - HEADER_12;
+        if ((length - packed) >= fragmentLength - (reference.type.len * 4))
+            size = fragmentLength - (reference.type.len * 4);
         else {
             size = length - packed ;
             ptr->header.type.control = 1;
@@ -226,7 +276,7 @@ void fragmentMessage( fragment &message, int length, char* data, int fragmentLen
             ptr->header.flags.init = 1;
             ptr->header.type.control = 1;
         }
-
+        
         ptr->header.checksum = crc(data);
         ptr->header.dataLength = size;
         ptr->header.sequenceNumber = fragments;
@@ -234,7 +284,7 @@ void fragmentMessage( fragment &message, int length, char* data, int fragmentLen
 
         copyHeader(ptr->data, ptr->header);
 
-        std::copy_n(data, size, ptr->data + HEADER_12);
+        std::copy_n(data, size, ptr->data + (reference.type.len * 4));
         data += size;
  
         ptr = ptr->next;

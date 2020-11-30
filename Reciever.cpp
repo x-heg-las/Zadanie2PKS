@@ -6,7 +6,7 @@
 #include <WinSock2.h>
 #include <Windows.h>
 #include <thread>
-#include <fstream>
+
 #include <vector>
 #include <iostream>
 
@@ -38,7 +38,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
     char buffer[512];
     int slen ;
 
-    std::ofstream fileOut;    
+     
     int c = 0;
 
     sockaddr_in host;
@@ -48,9 +48,9 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
     stream* dataFlow;
 
     message* ptr = &transfered;
-    stream* streamptr = dataFlow;
+   // stream* streamptr = dataFlow;
     std::vector<Stream> streams; 
-    std::vector<Stream>::iterator it;
+   /// std::vector<Stream>::iterator it;
     ZeroMemory(&dataFlow, sizeof(dataFlow));
     while (true) {
 
@@ -92,23 +92,29 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     int namelen = strlen(ptr->data);
                   //  ptr->data += namelen + 1;
                     //ptr->len = protocol.data_len - (namelen + 1);
-                    Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len - (namelen + 1), protocol.seq);
-                    fragment.data += namelen + 1;
+                   // Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len - (namelen + 1), protocol.seq);
+                    Stream* str;
+
+                  //  fragment.data += namelen + 1;
                     std::find_if(streams.begin(),
                                  streams.end(),
-                                 [&var = protocol.seq, &frg = fragment]
-                                 (Stream& s) -> void { if (s.streamnumber == var) { s.addFragment(frg); }  });
+                                 [&var = protocol.stream,&se = str]
+                    (Stream& s) -> bool { if (s.streamnumber == var) { se = &s; return true; }return false;  });
                     
+                    str->addFragment(Message(buffer + protocol.type.len * 4 + namelen + 1, protocol.data_len - (namelen + 1), protocol.seq));
                     
                     
                 }
                 else {
-                    Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len , protocol.seq);
+                   // Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len , protocol.seq);
                     //ptr->len = protocol.data_len;
+                    Stream* str;
                     std::find_if(streams.begin(),
                                  streams.end(),
-                                 [&var = protocol.seq, &frg = fragment]
-                                 (Stream& s) -> void { if (s.streamnumber == var) { s.addFragment(frg); }  });
+                        [&var = protocol.stream,  &se = str]
+                    (Stream& s) -> bool { if (s.streamnumber == var) { se = &s; return true; }return false;  });
+
+                    str->addFragment(Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
 
                 }
                 
@@ -119,24 +125,28 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     int namelen = strlen(ptr->data);
                     //  ptr->data += namelen + 1;
                       //ptr->len = protocol.data_len - (namelen + 1);
-                    Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len - (namelen + 1), protocol.seq);
-                    fragment.data += namelen + 1;
+                   // Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len - (namelen + 1), protocol.seq);
+                    Stream* str;
+                   // fragment.data += namelen + 1;
                     std::find_if(streams.begin(),
                         streams.end(),
-                        [&var = protocol.seq, &frg = fragment]
-                    (Stream& s) -> void { if (s.streamnumber == var) { s.addFragment(frg); }  });
+                        [&var = protocol.stream, &se = str]
+                    (Stream& s) -> bool { if (s.streamnumber == var) { se = &s; return true; }return false;  });
 
+                    str->addFragment(Message(buffer + protocol.type.len * 4 + (namelen + 1), protocol.data_len - (namelen + 1), protocol.seq));
 
 
                 }
                 else {
-                    Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq);
+                   // Message fragment = Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq);
                     //ptr->len = protocol.data_len;
+                    Stream* str;
                     std::find_if(streams.begin(),
                         streams.end(),
-                        [&var = protocol.seq, &frg = fragment]
-                    (Stream& s) -> void { if (s.streamnumber == var) { s.addFragment(frg); }  });
+                        [&var = protocol.stream, &se = str]
+                    (Stream& s) -> bool { if (s.streamnumber == var) { se = &s; return true; }return false;  });
 
+                    str->addFragment(Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
                 }
 
 
@@ -146,15 +156,14 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                 if (reference.type.text) {
 
                     ZeroMemory(buffer, 512);
-                    concat(&dataFlow, protocol.stream, buffer);
+                    concat(streams, protocol.stream, buffer);
                     std::cout << buffer << std::endl;
                                  
-                    //      freebuff
+                    
                 }
             }
 
 
-            ptr = ptr->next;
 
         }
 
