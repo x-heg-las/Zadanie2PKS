@@ -46,7 +46,9 @@ int main(int argc, char **argv) {
 
 		for(IP_addr = INADDR_NONE; IP_addr == INADDR_NONE; IP_addr = inet_addr("127.0.0.1"));  //TODO : skontroluj riadne to nacitavanie
 
-		Sender client = CLIENT_INIT(IP_addr, 48514);
+		//Sender client = CLIENT_INIT(IP_addr, 48514);
+
+		Sender client = Sender(IP_addr, 48514);
 		
 		client.wakeUp();
 		client.run();

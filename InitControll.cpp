@@ -4,11 +4,11 @@
 #include <vector>
 #include <algorithm>
 #include <windows.h>
+#include <fstream>
 
-
-void concat(std::vector<Stream> &streams, int id, char *buffer)
+int concat(std::vector<Stream> &streams, int id, char *buffer)
 {
-   
+    int offset = 0;
    /*
    std::find_if(streams.begin(),
         streams.end(),
@@ -28,16 +28,7 @@ void concat(std::vector<Stream> &streams, int id, char *buffer)
            );
            */
 
-           int offset = 0;
-
-           int iter = 0;
-
-           for (Message& mes : flow.fragments) {
-               if (mes.offset != iter)
-                   return;
-               iter++;
-           }
-
+         
 
            for (Message& mes : flow.fragments) {
 
@@ -76,7 +67,7 @@ void concat(std::vector<Stream> &streams, int id, char *buffer)
     }
     */
 
-    return;
+    return offset;
 }
 
 char* arq(header &protocol, int len)
@@ -96,9 +87,9 @@ char* arq(header &protocol, int len)
         protocol.type.control = 1;
     }
     
-    char *msg = new char[HEADER_8];
+    char *msg = new char[HEADER_12];
     
-    memcpy(msg, &protocol, len);
+    memcpy(msg, &protocol, HEADER_12);
 
     return msg;
 }
@@ -107,7 +98,7 @@ char* arq(header &protocol, int len)
 int chooseService()
 {
     char choice;
-    std::cout << "Vyber mod, v ktorom chcete pracovat (reciever\sender)\n[r/s] ";
+    std::cout << "Vyber mod, v ktorom chcete pracovat (reciever/sender)[r/s] ";
     std::cin >> choice;
     
     if (choice == SENDER || choice == RECIEVER)
@@ -166,6 +157,18 @@ std::string getFilename()
     
     return "" ;
 }
+
+std::vector<char>  requestPackets(Stream& stream)
+{
+    std::vector<char> missing;
+
+    for (auto missed : stream.missing) {
+        if (missed != -1)
+            missing.push_back(missed);
+    }
+    return missing;;
+}
+
 /*
 void freebuffer(stream *data)
 {
@@ -214,7 +217,7 @@ std::string loadIP()
 {
 
     std::string input;
-    std::cout << "Zadaj IP adresu prijmacieho zariadenia s pouzitim \".\" notacie . (x.x.x.x)" << std::endl;
+    std::cout << "Zadaj IP adresu prijmacieho zariadenia s pouzitim notacie . (x.x.x.x)" << std::endl;
 
     std::cin >> input;
 
@@ -282,6 +285,12 @@ void fragmentMessage( fragment &message, int length, char* data, int fragmentLen
         ptr->header.sequenceNumber = fragments;
         ptr->next = new fragment;
 
+        if (type == NAME) {
+            ptr->header.flags.name = 1;
+            ptr->header.type.binary = 1;
+        }
+       
+
         copyHeader(ptr->data, ptr->header);
 
         std::copy_n(data, size, ptr->data + (reference.type.len * 4));
@@ -294,6 +303,37 @@ void fragmentMessage( fragment &message, int length, char* data, int fragmentLen
     ZeroMemory(ptr, sizeof(struct fragment));
 
 }
+
+bool checkCompletition(std::vector<Stream>& stream,  short streamid)
+{
+    Stream* data = findStream(stream, streamid);
+
+    int counter = 0;
+    for (auto member : data->fragments) {
+        data->missing.at(counter) = -1;
+
+        if (member.offset != counter)
+            return true; //daj false potom
+        counter++;
+    }
+
+  
+    return true;
+}
+
+Stream *findStream(std::vector<Stream>& streams, short id)
+{
+    Stream* str;
+   std::find_if(streams.begin(),
+        streams.end(),
+        [&var = id, &se = str]
+    (Stream& s) -> bool { if (s.streamnumber == var) { se = &s; return true; }return false;  });
+
+
+    return str;
+}
+
+
 
 unsigned short crc(char* data){
 

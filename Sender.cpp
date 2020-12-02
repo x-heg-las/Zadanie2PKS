@@ -8,16 +8,60 @@
 #include "InitControll.h"
 #include <fstream>
 #include <string.h>
+#include <mutex>
+
+
 
 void recieveMessage(){
+    
+}
 
+int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, SOCKET socket) {
+
+    struct fragment stream;
+   
+
+    ZeroMemory(&stream, sizeof(stream));
+    char* fileBuffer = new char[ MAX_PATH];
+    ZeroMemory(fileBuffer,  MAX_PATH);
+    int result;
+
+    std::string fileName = filePath.substr(filePath.find_last_of("/\\") + 1);
+
+    memcpy(fileBuffer, fileName.c_str(), fileName.length() + 1);
+
+    if (fileName.length() + 1 > fragmentLength) {
+        stream.header.type.len = 3;
+    }
+    else
+        stream.header.type.len = 2;
+
+    fragmentMessage(stream, fileName.length(), fileBuffer, fragmentLength, NAME);
+
+   
+
+    while (stream.next) {
+
+        if (result = sendto(socket, stream.data, (stream.header.dataLength + stream.header.type.len * 4), 0, (struct sockaddr*)&host, sizeof(host)) == SOCKET_ERROR) {
+
+            std::cout << "Client : Failed to send data" << std::endl;
+        }
+
+        stream = *stream.next;
+    }
+
+    
+
+
+
+    return 0;
 }
 
 int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket)
 {
 
-    std::ifstream fileInput(filePath, std::ifstream::out | std::ifstream::binary);
-
+    std::ifstream fileInput(filePath, std::ifstream::in | std::ifstream::binary);
+    
     struct fragment stream;
     fileInput.seekg(0, fileInput.end);
     int fileSize = fileInput.tellg() , result = SOCKET_ERROR;
@@ -26,10 +70,6 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
     ZeroMemory(&stream, sizeof(stream));
     char* fileBuffer = new char[fileSize + MAX_PATH];
     ZeroMemory(fileBuffer, fileSize + MAX_PATH);
-
-    std::string fileName = filePath.substr(filePath.find_last_of("/\\") + 1);
-    
-    memcpy(fileBuffer, fileName.c_str(), fileName.length() + 1);
    
     if (fileSize + HEADER_8 > fragmentLen) {
         
@@ -42,23 +82,28 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
         stream.header.type.binary = 1;
     }
 
-
-    fileInput.read(fileBuffer + fileName.length() + 1, static_cast<std::streamsize>(fragmentLen) - stream.header.type.len * 4);
+    
+    fileInput.read(fileBuffer , static_cast<std::streamsize>(fileSize));
 
     fragmentMessage(stream, fileSize, fileBuffer, fragmentLen, FILE);
 
+    int cnt = 0;
     while (stream.next) {
 
         if (result = sendto(connectionSocket, stream.data, (stream.header.dataLength + stream.header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
         
             std::cout << "Client : Failed to send data" << std::endl;
         }
-
+        Sleep(1);
+        cnt++;
         stream = *stream.next;
     }
+
+    std::cout << "POSLANYCH : " + cnt;
     // este neak uvolnovanie dat zabezpeciit 
     return 1;
 }
+
 int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int type) // type nemusi byt
 {
     int len = message.length();
@@ -72,8 +117,8 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
         stream.header.type.len = 3;
         stream.header.type.text = 1;
        
-        fragmentMessage(stream, len+1, (char*)message.c_str(), fragmentLen, TEXT);
-
+        fragmentMessage(stream, len+1, (char*)message.c_str(), fragmentLen, TEXTM);
+        int cnt = 0;
         while (stream.next) {
             
             if (result = sendto(connectionSocket, stream.data, (stream.header.dataLength + stream.header.type.len*4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
@@ -81,15 +126,18 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
                 std::cout << "Client :fragment send error" << std::endl;
 
             }
-        
+            cnt++;
             stream = *stream.next;
+           
         }
+        std::cout << "POSLANYCH : " + cnt;
         // spoj do jedneho prikzu
     }
     else {
         stream.header.type.len = 2;
         stream.header.type.text = 1;
         fragmentMessage(stream, len + 1, (char*)message.c_str(), fragmentLen, type);
+        
         if (result = sendto(connectionSocket, stream.data, (stream.header.dataLength + stream.header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
 
             struct fragment messageHeader; 
@@ -98,6 +146,7 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
 
         }
 
+      
     }
     return 0;
 }
@@ -173,7 +222,7 @@ void Sender::run()
 
 
     const char * message = "this is a mesage that i want to send bla bah blah baaa je tiooto skoro koniec uzz teraz fakt. tu :D";
-    char recieveBuffer[512];
+    char recieveBuffer[1000];
 
     ZeroMemory(&hints, sizeof(hints));
 
@@ -203,11 +252,13 @@ void Sender::run()
             case 't':
                 std::cout << "Message : ";
                 std::cin >> msg;
-                _resullt = sendMessage(msg, fragment, hostsockaddr, connectionSocket, TEXT);
+                _resullt = sendMessage(msg, fragment, hostsockaddr, connectionSocket, TEXTM);
                 break;
             case 'f' :
                 filename = getFilename();
-             
+                
+                _resullt = connect(filename, fragment, hostsockaddr, connectionSocket);
+
                 _resullt = sendFile(filename, fragment, hostsockaddr, connectionSocket);
                
 

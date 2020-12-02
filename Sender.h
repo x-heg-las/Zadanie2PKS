@@ -3,9 +3,10 @@
 #include <WinSock2.h>
 #include <string>
 #include <fstream>
+#include <mutex>
+#include <fstream>
 
-#define FILE 1
-#define TEXT 2
+#define MAX_SEND 100
 
 #define CLIENT_INIT(address, port ) \
   Sender( address, port)
@@ -13,14 +14,16 @@
 
 class Sender
 {
+
+
 	public:
 		Sender(unsigned long WSAAPI addr, unsigned short _port) {
 			ip = addr;
 			port = _port;
 			alive = true;
 			
-			fragment = 512;
-			hostsockaddr.sin_family = AF_INET; // mozno len ipv4
+			fragment = 1000;
+			hostsockaddr.sin_family = AF_INET; 
 			hostsockaddr.sin_port = htons(_port);
 			hostsockaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
@@ -34,10 +37,11 @@ class Sender
 
 		int port;
 		unsigned short fragment;
-		static constexpr int maxFragment = 512;
+		static constexpr int maxFragment = 1000;
 		unsigned long ip;
 		static int sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int type);
 		static int sendFile(std::string fileName, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket);
+		static int connect(std::string fileName, int fragmentLength, sockaddr_in host, SOCKET socket);
 		void wakeUp();
 		void run();
 		void cleanup();
