@@ -17,13 +17,9 @@ struct fragment {
 
 	Protocol header;
 	char* data;
-	struct fragment* next;
 
 };
 
-struct recievedFragments {
-
-};
 
 struct message {
 	
@@ -124,6 +120,6 @@ int chooseService();
 std::string getFilename();
 std::string loadIP();
 Stream *findStream(std::vector<Stream> &streams, short id);
-void fragmentMessage(fragment &message, int length, char* data, int fragmentLength, int type);
+int fragmentMessage(std::vector<fragment> & fragments,struct fragment message, int length, char* data, int fragmentLength, int type);
 bool checkCompletition(std::vector<Stream> &stream, short streamid);
 unsigned short crc(char* data);

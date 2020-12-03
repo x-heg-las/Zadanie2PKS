@@ -9,26 +9,9 @@
 int concat(std::vector<Stream> &streams, int id, char *buffer)
 {
     int offset = 0;
-   /*
-   std::find_if(streams.begin(),
-        streams.end(),
-        [&var = id, &stream = s, &con = confirmed]
-   (Stream& s) -> bool { if (s.streamnumber == var) { s = *stream; con = true;  return true;
-   }return false;  });
-   */
     int cnt = 0;
    for (Stream& flow : streams) {
        if (flow.streamnumber == id) {
-           /*
-           std::sort(
-               flow.fragments.begin(), flow.fragments.end(),
-               [] (const Message &a,const Message &b) -> bool {
-                   return a.offset < b.offset;
-               }
-           );
-           */
-
-         
 
            for (Message& mes : flow.fragments) {
 
@@ -41,32 +24,6 @@ int concat(std::vector<Stream> &streams, int id, char *buffer)
        cnt++;
     }
 
-    //int offset = 0;
-
-    /*
-    if (!check(*ptr)) {
-        
-        std::cout << "Server : Chyba v InitControl;" << std::endl;
-        return;
-    }
-    
-
-    int iter = 0;
-
-    for (Message& mes : s->fragments) {
-        if (mes.offset != iter)
-            return;
-        iter++;
-    }
-        
-
-    for (Message& mes : s->fragments) {
-
-        memcpy((buffer) + offset, mes.data, mes.len);
-        offset += mes.len;
-    }
-    */
-
     return offset;
 }
 
@@ -76,17 +33,18 @@ char* arq(header &protocol, int len)
         protocol.data_len = 0;
         protocol.flags.retry = 1;
         protocol.seq = len;
-        protocol.type.len = 2;
+        protocol.type.len =  protocol.type.len;
         protocol.type.control = 1;
     }
     else {
         protocol.data_len = 0;
         protocol.flags.ack = 1;
         protocol.seq = len;
-        protocol.type.len = 2;
+        protocol.type.len = protocol.type.len;
         protocol.type.control = 1;
     }
     
+    //protocol.len
     char *msg = new char[HEADER_12];
     
     memcpy(msg, &protocol, HEADER_12);
@@ -162,7 +120,7 @@ std::vector<char>  requestPackets(Stream& stream)
 {
     std::vector<char> missing;
 
-    for (auto missed : stream.missing) {
+    for (auto &missed : stream.missing) {
         if (missed != -1)
             missing.push_back(missed);
     }
@@ -226,22 +184,21 @@ std::string loadIP()
 
 void copyHeader(char* data, Protocol header) {
 
-    //std::copy_n(&header.flags,1,data);
     memcpy(data++,&header.flags,1);
-    //std::copy_n(&header.type, 1, data + 1);
+    
     memcpy(data++,&header.type, 1);
-    //std::copy_n(&header.checksum, 2, data + 1);
+   
     memcpy(data , &header.checksum, 2);
     
     if (header.type.len >= 1) {
-        //std::copy_n(&header.dataLength, 2, data + 2);
+        
         data += 2;
         memcpy(data, &header.dataLength,  2);
-        //std::copy_n(&header.streamNumber, 2, data + 2);
+      
         data += 2;
         memcpy(data, &header.streamNumber,  2);
         if(header.type.len >= 2){
-            //std::copy_n(&header.sequenceNumber, 4, data + 2);
+          
             data += 2;
             memcpy(data , &header.sequenceNumber,  4);
         }
@@ -251,56 +208,55 @@ void copyHeader(char* data, Protocol header) {
     return;
 }
 
-void fragmentMessage( fragment &message, int length, char* data, int fragmentLength, int type) {
+int fragmentMessage( std::vector<fragment> &vec, struct fragment message, int length, char* data, int fragmentLength, int type) {
 
-    fragment* ptr = NULL;
+    fragment ptr;
     Protocol reference = message.header;
+    int fragments = 0;
 
-    ptr = &message;
+    ptr = message;
     
-    for (int packed = 0, fragments = 0; packed <= length; packed += (fragmentLength - reference.type.len * 4), fragments++) {
+    for (int packed = 0; packed <= length; packed += (fragmentLength - reference.type.len * 4), fragments++) {
 
-        ZeroMemory(&ptr->header, sizeof(header));
+       // ZeroMemory(&ptr->header, sizeof(header));
         int size = 0;
 
-        ptr->header = reference;
+        ptr.header = reference;
 
         if ((length - packed) >= fragmentLength - (reference.type.len * 4))
             size = fragmentLength - (reference.type.len * 4);
         else {
             size = length - packed ;
-            ptr->header.type.control = 1;
-            ptr->header.flags.quit = 1;
+            ptr.header.type.control = 1;
+            ptr.header.flags.quit = 1;
         }
 
-        ptr->data = new char[fragmentLength];
+        ptr.data = new char[fragmentLength];
 
         if (!fragments) {
-            ptr->header.flags.init = 1;
-            ptr->header.type.control = 1;
+            ptr.header.flags.init = 1;
+            ptr.header.type.control = 1;
         }
         
-        ptr->header.checksum = crc(data);
-        ptr->header.dataLength = size;
-        ptr->header.sequenceNumber = fragments;
-        ptr->next = new fragment;
+        ptr.header.checksum = crc(data);
+        ptr.header.dataLength = size;
+        ptr.header.sequenceNumber = fragments;
 
         if (type == NAME) {
-            ptr->header.flags.name = 1;
-            ptr->header.type.binary = 1;
+            ptr.header.flags.name = 1;
+            ptr.header.type.binary = 1;
         }
        
 
-        copyHeader(ptr->data, ptr->header);
+        copyHeader(ptr.data, ptr.header);
 
-        std::copy_n(data, size, ptr->data + (reference.type.len * 4));
+        std::copy_n(data, size, ptr.data + (reference.type.len * 4));
         data += size;
- 
-        ptr = ptr->next;
         
-
+        vec.push_back(ptr);
     }
-    ZeroMemory(ptr, sizeof(struct fragment));
+
+    return fragments;
 
 }
 
@@ -317,14 +273,14 @@ bool checkCompletition(std::vector<Stream>& stream,  short streamid)
         counter++;
     }
 
-  
     return true;
 }
 
 Stream *findStream(std::vector<Stream>& streams, short id)
 {
     Stream* str;
-   std::find_if(streams.begin(),
+    
+    std::find_if(streams.begin(),
         streams.end(),
         [&var = id, &se = str]
     (Stream& s) -> bool { if (s.streamnumber == var) { se = &s; return true; }return false;  });

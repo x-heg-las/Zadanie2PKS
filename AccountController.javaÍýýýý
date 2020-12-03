@@ -1,0 +1,166 @@
+package System;
+
+import Osoba.*;
+import Ticket.Ticket;
+import javafx.application.Platform;
+import javafx.collections.ObservableList;
+import javafx.fxml.FXML;
+import javafx.fxml.FXMLLoader;
+import javafx.scene.Parent;
+import javafx.scene.Scene;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.ListView;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+
+import static System.SystemInit.*;
+
+import java.io.IOException;
+import java.util.Timer;
+import java.util.TimerTask;
+
+public class AccountController implements ControledScreen, InputChecker {
+
+   private ScreensController myController;
+   private Osoba osoba;
+   private ObservableList<Ticket> ticketList;
+   private Timer timer;
+
+    @FXML Label nameLabel, timeElapsed, surnameLabel, idLabel, balance;
+    @FXML private Button info, cart, cancel;
+
+    @FXML ListView<Ticket> listView;
+
+
+    public void dataInit(Osoba osoba){
+        hide(info, cancel);
+        nameLabel.setText(osoba.getName());
+        surnameLabel.setText(osoba.getSurname());
+        idLabel.setText(osoba.getPersonId());
+        this.osoba = osoba;
+        if(!(osoba instanceof SysAdmin)){
+            balance.setText(Double.toString(((Zakaznik) osoba).getUcet().getBalance()));
+            show(listView, cart);
+            if(this.osoba != null){
+                ticketList = ((Zakaznik) osoba).getItemList();
+                listView.setItems(ticketList);
+            }
+        }
+        else {
+            show(info);
+            hide(listView, cart, cancel);
+        }
+        if (osoba instanceof ExtraZakaznik)
+            show(cancel);
+        listView.setCellFactory(ticketListView -> new TicketCell());
+    }
+
+    public void setScreenParent(ScreensController screenParent){
+        myController = screenParent;
+    }
+    @FXML
+    public void logOut() {
+        myController.setScreen(SystemInit.mainId);
+        this.osoba = null;
+    }
+
+    @FXML
+    public void katalogButtonHandle(){
+        KatalogViewController katController = (KatalogViewController) myController.getControl(katId);
+        katController.dataInit(myController,osoba);
+        myController.setScreen(SystemInit.katId);
+    }
+
+    @FXML
+    public void checkout() throws IOException {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("../Views/CheckoutView.fxml"));
+        Parent parent  = loader.load();
+        ticketList = ((Zakaznik) osoba).getItemList();
+        listView.setItems(ticketList);
+        CheckoutController ctrl = loader.getController();
+        ctrl.dataInit((Zakaznik) osoba, this);
+        ctrl.getPrice();
+        Scene scene = new Scene(parent,650, 500);
+        Stage stage = new Stage();
+        stage.initModality(Modality.APPLICATION_MODAL);
+        stage.setScene(scene);
+        stage.showAndWait();
+    }
+
+    public void cancelTicket(){
+        if(osoba != null && osoba instanceof ExtraZakaznik){
+            Ticket t = listView.getSelectionModel().getSelectedItem();
+            ((ExtraZakaznik)osoba).refund(t);
+            system.getTicketCache().deleteEntry((Zakaznik)osoba, t);
+            system.save();
+            listView.getItems().remove(t);
+            changeBalance();
+        }
+    }
+
+    public void cancelTimer(){
+        if(timer != null)
+            this.timer.cancel();
+        timeElapsed.setText("");
+    }
+
+    public void setTimer() {
+            cancelTimer();
+        timer = new Timer();
+        final int[] interval = {240};
+        timer.scheduleAtFixedRate(new TimerTask() {
+            public void run() {
+                if(interval[0] > 0)
+                {
+                    Platform.runLater(() -> timeElapsed.setText("Cas na zaplatenie objednávky: "+ interval[0] + " sekund."));
+                    System.out.println(interval[0]);
+                    interval[0]--;
+                }
+                else {
+                    timer.cancel();
+                    ((Zakaznik)osoba).getCartList().removeAll(((Zakaznik) osoba).getCartList());
+                    Platform.runLater(() -> timeElapsed.setText(""));
+                }
+            }
+        }, 1000,1000);
+    }
+
+    public void update(Osoba person) {
+        if (person == this.osoba) {
+            ticketList = ((Zakaznik) person).getItemList();
+            listView.setItems(ticketList);
+            listView.setCellFactory(ticketListView -> new TicketCell());
+        }
+    }
+
+    public void changePersonalInfo() throws IOException{
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/Views/acountInfo.fxml"));
+        Parent parent  = loader.load();
+        AcountInfo ctrl = loader.getController();
+        ctrl.initialize((Zakaznik) osoba);
+        Scene scene = new Scene(parent,650, 500);
+        Stage stage = new Stage();
+        stage.initModality(Modality.APPLICATION_MODAL);
+        stage.setScene(scene);
+        stage.showAndWait();
+        system.save();
+        this.dataInit(osoba);
+    }
+
+    public void openAccountManager() throws IOException {
+        FXMLLoader loader = new FXMLLoader(getClass().getResource("/Views/ticketCache.fxml"));
+        Parent parent  = loader.load();
+        Scene scene = new Scene(parent,650, 500);
+        Stage stage = new Stage();
+        stage.initModality(Modality.APPLICATION_MODAL);
+        stage.setScene(scene);
+        stage.showAndWait();
+        system.save();
+    }
+
+
+    public void changeBalance(){
+        this.balance.setText(((Zakaznik) osoba).getUcet().getBalance() + " €");
+    }
+}

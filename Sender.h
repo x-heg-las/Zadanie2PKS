@@ -7,6 +7,9 @@
 #include <fstream>
 
 #define MAX_SEND 100
+#define ACK 10
+#define KA 16
+
 
 #define CLIENT_INIT(address, port ) \
   Sender( address, port)
