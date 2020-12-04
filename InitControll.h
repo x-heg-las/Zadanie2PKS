@@ -41,26 +41,56 @@ struct stream {
 
 class Message {
 
-	public:
-		Message(char* _data, short datalen, int _offset) {
+public:
 
-			data = new char[datalen+1];
-			memcpy(data ,_data, datalen);
-			len = datalen;
-			offset = _offset;
-		}
-		
-		~Message() {
-			delete [] data;
-		}
-		
-		Message(const Message& mes) {
-			data = new char[mes.len];
-			memcpy(data, mes.data, mes.len);
-			len = mes.len;
-			offset = mes.offset;
 
+
+	Message(char* _data, short datalen, int _offset) {
+
+		data = new char[datalen + 1];
+		memcpy(data, _data, datalen);
+		len = datalen;
+		offset = _offset;
+	}
+
+	~Message() {
+		if(data)
+			delete[] data;
+	}
+
+	Message(const Message& mes)
+		: Message(mes.data, mes.len, mes.offset)
+	{}
+
+	Message& operator=(const Message& msg) {
+		return *this = Message(msg);
+	}
+
+	Message(Message && msg) noexcept
+	:data(nullptr), offset(BAD_INPUT), len(BAD_INPUT)
+	{
+		data = msg.data;
+		len = msg.len;
+		offset = msg.offset;
+
+
+		msg.data = nullptr;
+	}
+	
+	Message& operator=(Message&& msg)  {
+		if (this != &msg) {
+			delete[] data;
 		}
+
+		data = msg.data;
+		len = msg.len;
+		offset = msg.offset;
+
+
+		msg.data = nullptr;
+
+		return *this;
+	}
 
 		char* data;
 		int offset;
@@ -97,7 +127,7 @@ public:
 	short streamnumber;
 	char finished;
 
-	void addFragment(Message msg) {
+	void addFragment(Message& msg) {
 
 		if (ack.find(msg.offset) == ack.end()) {
 			if (fragments.size() > msg.offset) {

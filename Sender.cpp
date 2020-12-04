@@ -174,15 +174,15 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
     for(struct fragment &msg : data){
         unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
 
-
-        if (msg.header.sequenceNumber == 0)
+        
+        if (msg.header.sequenceNumber == 25)
         {
             change = *(msg.data + 18);
             *(msg.data+ 18) = '#';
         }
 
 
-
+        
 
 
         if (result = sendto(connectionSocket, msg.data, (msg.header.dataLength + msg.header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
@@ -193,9 +193,9 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
         else {
             frg_sent++;
         }
-        
+       
 
-        if (msg.header.sequenceNumber == 0) {
+        if (msg.header.sequenceNumber == 25) {
             *(msg.data + 18) = change;
 
 
@@ -279,8 +279,6 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
 
             }
             cnt++;
-          
-           
         }
         printf("POSLANYCH : _%d", cnt);
         

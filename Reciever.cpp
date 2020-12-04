@@ -110,8 +110,9 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                         Stream* str;
 
                         str = findStream(namevec, protocol.stream);
+                        Message mesg = Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq);
 
-                        str->addFragment(Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
+                        str->addFragment(mesg);
 
                         //neviem ci to je potrebne 
                         filenameSize += protocol.data_len;
@@ -155,14 +156,15 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
             }
 
+            Message mesg = Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq);
             if (protocol.stream == lastStream)
             {
-                recent->addFragment(Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
+                recent->addFragment(mesg);
             }
             else {
 
                 recent = findStream(streams, protocol.stream);
-                recent->addFragment(Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
+                recent->addFragment(mesg);
             }
 
             
@@ -175,7 +177,6 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                 
                 if (checkCompletition(streams, protocol.stream)) {
 
-                                                                    std::cout << "saving" << std::endl;
 
                 if (protocol.type.binary) {
                     fileName = new char[filenameSize + 1];
@@ -185,14 +186,15 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                                
                     int size = concat(streams, protocol.stream, filebuffer);
                                 
-                                
+
+                    std::cout << "saving" << std::endl;
                     //vytvorenie suboru
                     std::ofstream file(fileName, std::ios::out | std::ios::binary | std::ios::app);
                     file.write(filebuffer, size);
                     file.close();
 
 
-                    //delete[] fileName;
+                    delete[] fileName;
                                 
                 }
 
@@ -203,23 +205,10 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                 }
 
                 }
-                else {      // znovuvyziadanie spravy
+                else {      
                   
                     continue;
-
-                       /*
-                    std::vector<char> missing = requestPackets(*str);
-                    header reference;
-                    ZeroMemory(&reference, sizeof(reference));
-
-                    reference.flags.retry = reference.type.control = reference.type.binary = 1;
-                 
-                    for (auto member : missing)
-
-                    {
-                        reply(host, host, arq(reference, reference.seq));
-                    }
-                    */
+                     
                 }
                                   
             }
