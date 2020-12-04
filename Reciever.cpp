@@ -165,19 +165,20 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
                 recent = findStream(streams, protocol.stream);
                 recent->addFragment(mesg);
+                lastStream = protocol.stream;
             }
 
             
           
-            if (protocol.flags.quit || recent->finished) {
+            if (protocol.flags.quit || (recent && recent->finished)) {
                 //** prijmeme posledny paket komunikacie **//
 
                 //////// toto oprav na zrozumitelnejsie ////////
                 recent->initializeMissing(protocol.seq);
                 
                 if (checkCompletition(streams, protocol.stream)) {
-
-
+                
+                    std::cout << "transfer done" << std::endl;
                 if (protocol.type.binary) {
                     fileName = new char[filenameSize + 1];
                                

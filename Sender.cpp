@@ -20,7 +20,41 @@
 std::mutex free_to_send_mtx;
 std::atomic<bool> ready;
 
-void keepAlive() {
+void keepAlive(sockaddr_in hostsockaddr, SOCKET conectionsocket) {
+
+    
+    struct fragment ka_message;
+    ZeroMemory(&ka_message, sizeof(ka_message));
+    ka_message.header.dataLength = 0;
+    ka_message.header.type.keep_alive = 1;
+    char message[25] = { 0 };
+    char recvbuf[25] = { 0 };
+    int result;
+
+    BOOL bOptVal = FALSE;
+    int bOptLen = sizeof(BOOL);
+
+    sockaddr_in addr_in;
+    int slen = sizeof(addr_in);
+    int iOptVal = 15000;
+    int iOptLen = sizeof(int);
+
+    setsockopt(conectionsocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&iOptVal, iOptLen);
+    
+    copyHeader(message, ka_message.header);
+    
+    while (ready.load()) {
+
+
+        if (result = sendto(conectionsocket, message, HEADER_8, 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
+
+            std::cout << "Client : Failed to send data" << std::endl;
+        }
+
+        if ((recvfrom(conectionsocket, (char*)recvbuf, 25, 0, (struct sockaddr*)&addr_in, &slen)) != SOCKET_ERROR){}
+
+    }
+
 
 
 
@@ -28,7 +62,7 @@ void keepAlive() {
 
 void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
     
-    char buffer[1000] = { 0 };
+    char buffer[512] = { 0 };
     sockaddr_in addr_in;
     int slen = sizeof(addr_in);
     header protocol;
@@ -42,6 +76,7 @@ void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
     int iOptLen = sizeof(int);
     setsockopt(listenSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&iOptVal, iOptLen);
     ZeroMemory(buffer, 512);
+  
     while (ready.load()) {
 
         
@@ -50,7 +85,7 @@ void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
             
             analyzeHeader(protocol, buffer);
 
-            if (protocol.flags.ack) {
+            if (type == ACK && protocol.flags.ack) {
 
                 free_to_send_mtx.lock();
                 seq.erase(protocol.seq);
@@ -62,7 +97,7 @@ void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
     }
 
 }
-
+//oprav arq
 int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, SOCKET socket) {
 
     struct fragment stream;
@@ -105,6 +140,14 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
             // toto sa da este upraavit
             
             for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
+
+                //modifikacia dat - nastavenie retry flagu
+                *((unsigned char*)data.at(it->first).data) |= (1);
+                //nove crc pre zmenene data
+                unsigned short newCrc = crc(data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4));
+                //zmena crc v hlavicke so zmenenym flagom
+                *((unsigned short*)data.at(it->first).data + 1) = newCrc;
+
                 if (result = sendto(socket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&host, sizeof(host)) == SOCKET_ERROR) {
 
                     std::cout << "Client : Failed to send data" << std::endl;
@@ -133,7 +176,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
 
 
     return 0;
-}
+}  // oprav arq
 
 int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket)
 {
@@ -175,7 +218,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
         unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
 
         
-        if (msg.header.sequenceNumber == 25)
+        if (msg.header.sequenceNumber%70 == 25)
         {
             change = *(msg.data + 18);
             *(msg.data+ 18) = '#';
@@ -195,13 +238,13 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
         }
        
 
-        if (msg.header.sequenceNumber == 25) {
+        if (msg.header.sequenceNumber % 70 == 25) {
             *(msg.data + 18) = change;
 
 
         }
         //std::this_thread::sleep_for(std::chrono::microseconds(250));
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        std::this_thread::sleep_for(std::chrono::milliseconds(3));
         for(int i = 0; i < 2 && !(frg_sent%WINDOW); i++){
 
             std::this_thread::sleep_for(std::chrono::milliseconds(5)); // pockame chvilu na oneskorene pakety
@@ -210,6 +253,14 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
 
                 free_to_send_mtx.lock();
                 for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
+
+                    //modifikacia dat - nastavenie retry flagu
+                    *((unsigned char*)data.at(it->first).data) |= (1);
+                    //nove crc pre zmenene data
+                    unsigned short newCrc = crc(data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4));
+                    //zmena crc v hlavicke so zmenenym flagom
+                    *((unsigned short*)data.at(it->first).data + 1) = newCrc;
+
                     if (result = sendto(connectionSocket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
 
                         std::cout << "Client : Failed to send data" << std::endl;
@@ -391,20 +442,29 @@ void Sender::run()
         std::cin >> choice;
         std::string msg, filename;
 
+        std::thread keepAlive_t;
+
         switch (choice) {
             case 't':
+                ready.store(false);
                 std::cout << "Message : ";
                 std::getline(std::cin, msg);
                 if(msg.size() > 0)
                     _resullt = sendMessage(msg, fragment, hostsockaddr, connectionSocket, TEXTM);
+
+                keepAlive_t = std::thread(&keepAlive, hostsockaddr, connectionSocket);
                 break;
             case 'f' :
+                ready.store(false);
+
                 filename = getFilename();
                 
                 _resullt = connect(filename, fragment, hostsockaddr, connectionSocket);
 
                 _resullt = sendFile(filename, fragment, hostsockaddr, connectionSocket);
 
+
+                keepAlive_t = std::thread(&keepAlive, hostsockaddr, connectionSocket);
                 break;
             case 'l':
                 std::cin >> fragment;

@@ -154,6 +154,7 @@ public:
 
 std::vector<char> requestPackets(Stream &stream);
 void analyzeHeader(header& protocol, char *buffer);
+void copyHeader(char* data, Protocol header);
 int concat(std::vector<Stream>& streams, int id, char* buffer);
 char* arq(header &protocol, int len);
 int chooseService();
