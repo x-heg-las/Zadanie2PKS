@@ -148,12 +148,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="aplication.cpp" />
+    <ClCompile Include="crc.cpp" />
     <ClCompile Include="InitControll.cpp" />
     <ClCompile Include="Protocol.cpp" />
     <ClCompile Include="Reciever.cpp" />
     <ClCompile Include="Sender.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="crc.h" />
     <ClInclude Include="InitControll.h" />
     <ClInclude Include="Protocol.h" />
     <ClInclude Include="Reciever.h" />

@@ -2,6 +2,7 @@
 
 #include "Reciever.h"
 #include "InitControll.h"
+
 #include "Protocol.h"
 #include <WinSock2.h>
 #include <Windows.h>
@@ -9,6 +10,8 @@
 #include <fstream>
 #include <vector>
 #include <iostream>
+
+#include "include/checksum.h"
 
 #define MAX_FILE 2100000
 #pragma comment(lib,"ws2_32.lib")
@@ -18,9 +21,9 @@ bool reply(sockaddr_in host, sockaddr_in server, char* data) {
     header protocol;
     analyzeHeader(protocol, data);
 
-    unsigned short sum = crc(data);
+    unsigned short sum = crc(data, protocol.data_len + (protocol.type.len * 4));
     SOCKET client = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-
+    unsigned short packetChecksum = protocol.chcecksum;
     int seq;
     char size = protocol.type.len;;
 
@@ -32,7 +35,7 @@ bool reply(sockaddr_in host, sockaddr_in server, char* data) {
     ZeroMemory(&protocol, sizeof(protocol));
     protocol.type.len = size;
 
-    if (!sum) {
+    if (sum == packetChecksum) {
         protocol.flags.ack = 1;
         sendto(client, arq(protocol, seq), 12, 0, (sockaddr*)&host, sizeof(host));
         return true;
@@ -58,17 +61,19 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
     header protocol, reference;
     message transfered;
     stream* dataFlow;
+    Stream* recent = nullptr;
        
     char* fileName = nullptr;
-    short filenameSize = 0;
+    short filenameSize = 0, lastStream = -1;
+
     message* ptr = &transfered;
     std::vector<Stream> namevec;
     std::vector<Stream> streams; 
-
+ 
     ZeroMemory(&dataFlow, sizeof(dataFlow));
     while (true) {
         
-        ZeroMemory(buffer, 1000);
+      //  ZeroMemory(buffer, 1000);
 
         if ((recvfrom(listenSocket, (char*)buffer, 1000, 0, (struct sockaddr*)&host, &slen)) == SOCKET_ERROR) {
 
@@ -77,28 +82,30 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
         }
         else {
             
-           
-            printf("Received packet from %s:%d\n", inet_ntoa(host.sin_addr), ntohs(host.sin_port));
+            printf("\nReceived packet from %s:%d", inet_ntoa(host.sin_addr), ntohs(host.sin_port));
 
             analyzeHeader(protocol, buffer);
     
-            if (protocol.flags.init) {
-                ptr = &transfered;
-                reference = protocol; 
-                Stream incoming = Stream(reference.stream, 0);
-                
-                if(protocol.flags.name)
-                    namevec.push_back(incoming);
-                else
-                    streams.push_back(incoming);
-
-            }
+            
 
             if (protocol.type.control) {
+                
+                if (protocol.flags.init) {
+                    ptr = &transfered;
+                    reference = protocol;
+                    Stream incoming = Stream(reference.stream, 0);
+
+                    if (protocol.flags.name)
+                        namevec.push_back(incoming);
+                    else
+                        streams.push_back(incoming);
+
+                }
 
                 if (reply(host, host, buffer)) {
-
-                   std::cout << "Server : packet: " << ntohs(host.sin_port) << ":seq:" << protocol.seq << " ->OK" << std::endl;
+                   
+                    printf("\nServer : packet no. %d -> OK", protocol.seq);
+                  
                     if (protocol.type.binary && protocol.flags.name) {
                         Stream *str; 
 
@@ -133,30 +140,36 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     }
                 }
                 else {
-                    std::cout << "Server : packet: " << ntohs(host.sin_port) << ":seq:" << protocol.seq << " ->BAD" << std::endl;
+                    printf("\n\nServer : packet no. %d -> BAD", protocol.seq);
                     continue;
                 }
                 if(protocol.flags.name || !(protocol.type.text || protocol.type.binary))
                     continue;
-            }
-            
-            if (!protocol.type.control) {
+            }else 
+            {
                 reply(host, host, buffer);
-                std::cout << "Server : packet: " << ntohs(host.sin_port) << ":seq:" << protocol.seq << " ->OK" << std::endl;
+                printf("\n\nServer : packet no. %d -> OK", protocol.seq);
+                
             }
       
             if (!protocol.flags.quit) {
 
-                    Stream *str; 
-                    str = findStream(streams, protocol.stream);
-                    str->addFragment(Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));                
+                if (protocol.stream == lastStream)
+                {
+                    recent->addFragment( Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
+                }
+                else {
+
+                    recent = findStream(streams, protocol.stream);
+                    recent->addFragment( Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
+                }
             }
             else {                 
                 //** prijmeme posledny paket komunikacie **//
 
                    
                 Stream *str = findStream(streams, protocol.stream);
-                str->addFragment(Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
+                str->addFragment( Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
                     
 
                 //////// toto oprav na zrozumitelnejsie ////////

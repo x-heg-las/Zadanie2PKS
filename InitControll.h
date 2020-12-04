@@ -2,7 +2,9 @@
 #include <string>
 #include <vector>
 #include "Protocol.h"
+#include "include/checksum.h"
 #include <fstream>
+
 
 #define BAD_INPUT -1
 #define SENDER 's'
@@ -122,4 +124,4 @@ std::string loadIP();
 Stream *findStream(std::vector<Stream> &streams, short id);
 int fragmentMessage(std::vector<fragment> & fragments,struct fragment message, int length, char* data, int fragmentLength, int type);
 bool checkCompletition(std::vector<Stream> &stream, short streamid);
-unsigned short crc(char* data);
+unsigned short crc(char* ptr, int length);

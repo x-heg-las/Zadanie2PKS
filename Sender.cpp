@@ -14,6 +14,7 @@
 #include <chrono>
 #include <assert.h>
 
+#include "include/checksum.h"
 
 
 std::mutex free_to_send_mtx;
@@ -33,20 +34,21 @@ void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
 
     int iOptVal = 1000;
     int iOptLen = sizeof(int);
-
+    setsockopt(listenSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&iOptVal, iOptLen);
+    ZeroMemory(buffer, 512);
     while (ready.load()) {
 
-        setsockopt(listenSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&iOptVal, iOptLen);
-        ZeroMemory(buffer, 512);
-        if ( (recvfrom(listenSocket, (char*)buffer, 1000, 0, (struct sockaddr*)&addr_in, &slen)) != SOCKET_ERROR) {
+        
+      
+        if ( (recvfrom(listenSocket, (char*)buffer, 512, 0, (struct sockaddr*)&addr_in, &slen)) != SOCKET_ERROR) {
             
             analyzeHeader(protocol, buffer);
 
             if (protocol.flags.ack) {
 
-                free_to_send_mtx.lock();
+                //free_to_send_mtx.lock();
                 seq.erase(protocol.seq);
-                free_to_send_mtx.unlock();
+               // free_to_send_mtx.unlock();
             }
             
 
@@ -95,6 +97,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
         }
         if (!(frg_sent%120) && !unrecieved.empty()) {//window
             // toto sa da este upraavit
+            
             for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
                 if (result = sendto(socket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&host, sizeof(host)) == SOCKET_ERROR) {
 
@@ -155,17 +158,11 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
     fileInput.read(fileBuffer , static_cast<std::streamsize>(fileSize));
     std::vector<struct fragment> data;
 
-
-
     int fragmentCount = fragmentMessage(data, stream, fileSize, fileBuffer, fragmentLen, FILE);
     std::map<int, int> unrecieved;
 
     std::thread listening(&recieveMessage, connectionSocket, ACK,std::ref(unrecieved));
-
-
-
-
-
+    
     int frg_sent = 0;
     for(struct fragment &msg : data){
         unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
@@ -177,25 +174,27 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
         else {
             frg_sent++;
         }
-        if (!(frg_sent % 120)) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            if (!unrecieved.empty()) {//window
+        
+        std::this_thread::sleep_for(std::chrono::microseconds(250));
+      
+        for(int i = 0; i < 2 && !(frg_sent%WINDOW); i++){
 
+            std::this_thread::sleep_for(std::chrono::milliseconds(5)); // pockame chvilu na oneskorene pakety
+
+            if (!unrecieved.empty()) {//window  // potom skus ten mutex co spravi :)
+
+                free_to_send_mtx.lock();
                 for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
                     if (result = sendto(connectionSocket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
 
                         std::cout << "Client : Failed to send data" << std::endl;
                     }
                 }
-
+                free_to_send_mtx.unlock();
             }
         }
+                
         
-        frg_sent++;
-      
-
-        
-       std::this_thread::sleep_for(std::chrono::microseconds(5));
     }
   
     
@@ -213,7 +212,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
 
 
     listening.join();
-    std::cout << "POSLANYCH : " + frg_sent;
+    printf("POSLANYCH :  %d \n", frg_sent);
     // este neak uvolnovanie dat zabezpeciit 
     return 1;
 }
@@ -248,7 +247,8 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
           
            
         }
-        std::cout << "POSLANYCH : " + cnt << std::endl;
+        printf("POSLANYCH : _%d", cnt);
+        //std::cout << "POSLANYCH : " + cnt << std::endl;
         
     return 0;
 }

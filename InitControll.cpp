@@ -1,5 +1,6 @@
 #include "InitControll.h"
 #include "Protocol.h"
+#include "crc.h"
 #include <iostream>
 #include <vector>
 #include <algorithm>
@@ -10,6 +11,7 @@ int concat(std::vector<Stream> &streams, int id, char *buffer)
 {
     int offset = 0;
     int cnt = 0;
+
    for (Stream& flow : streams) {
        if (flow.streamnumber == id) {
 
@@ -29,22 +31,17 @@ int concat(std::vector<Stream> &streams, int id, char *buffer)
 
 char* arq(header &protocol, int len)
 {
-    if (protocol.flags.retry) {
-        protocol.data_len = 0;
+    protocol.seq = len;
+    protocol.type.len = protocol.type.len;
+    protocol.data_len = 0;     
+    protocol.type.control = 1;
+
+    if (protocol.flags.retry) 
         protocol.flags.retry = 1;
-        protocol.seq = len;
-        protocol.type.len =  protocol.type.len;
-        protocol.type.control = 1;
-    }
-    else {
-        protocol.data_len = 0;
+    else 
         protocol.flags.ack = 1;
-        protocol.seq = len;
-        protocol.type.len = protocol.type.len;
-        protocol.type.control = 1;
-    }
-    
-    //protocol.len
+
+
     char *msg = new char[HEADER_12];
     
     memcpy(msg, &protocol, HEADER_12);
@@ -149,13 +146,13 @@ void analyzeHeader(header& protocol, char* buffer) {
     if (protocol.type.len == 2)
         protocol.seq = 0;
     if (protocol.type.len < 2) {
-        protocol.data_len = 0;
-        protocol.stream = 0;
+        protocol.data_len = 1;
+        protocol.stream ;
     }
 
     return;
 }
-
+/*
 bool check(message stream)
 {
     message* ptr = &stream;
@@ -169,7 +166,7 @@ bool check(message stream)
     }
     return true;
 }
-
+*/
 
 std::string loadIP()
 {
@@ -190,14 +187,14 @@ void copyHeader(char* data, Protocol header) {
    
     memcpy(data , &header.checksum, 2);
     
-    if (header.type.len >= 1) {
+    if (header.type.len > 1) {
         
         data += 2;
         memcpy(data, &header.dataLength,  2);
       
         data += 2;
         memcpy(data, &header.streamNumber,  2);
-        if(header.type.len >= 2){
+        if(header.type.len > 2){
           
             data += 2;
             memcpy(data , &header.sequenceNumber,  4);
@@ -218,7 +215,6 @@ int fragmentMessage( std::vector<fragment> &vec, struct fragment message, int le
     
     for (int packed = 0; packed <= length; packed += (fragmentLength - reference.type.len * 4), fragments++) {
 
-       // ZeroMemory(&ptr->header, sizeof(header));
         int size = 0;
 
         ptr.header = reference;
@@ -238,7 +234,7 @@ int fragmentMessage( std::vector<fragment> &vec, struct fragment message, int le
             ptr.header.type.control = 1;
         }
         
-        ptr.header.checksum = crc(data);
+        ptr.header.checksum = 0;
         ptr.header.dataLength = size;
         ptr.header.sequenceNumber = fragments;
 
@@ -249,8 +245,12 @@ int fragmentMessage( std::vector<fragment> &vec, struct fragment message, int le
        
 
         copyHeader(ptr.data, ptr.header);
-
         std::copy_n(data, size, ptr.data + (reference.type.len * 4));
+
+        ptr.header.checksum = crc(ptr.data, size + (reference.type.len * 4));
+        copyHeader(ptr.data, ptr.header);
+
+        
         data += size;
         
         vec.push_back(ptr);
@@ -265,11 +265,11 @@ bool checkCompletition(std::vector<Stream>& stream,  short streamid)
     Stream* data = findStream(stream, streamid);
 
     int counter = 0;
-    for (auto member : data->fragments) {
+    for (auto &member : data->fragments) {
         data->missing.at(counter) = -1;
 
         if (member.offset != counter)
-            return true; //daj false potom
+            return false; 
         counter++;
     }
 
@@ -290,11 +290,19 @@ Stream *findStream(std::vector<Stream>& streams, short id)
 }
 
 
+unsigned short crc(char* ptr, int length) {
 
-unsigned short crc(char* data){
+    uint16_t crc_ccitt_1d0f_val = 0x1d0f;
 
+    for (int i = 0; i < length; i++) {
 
+        if (i > 1 && i < 4) { // preskocim polia v havicke s CRC 
+            crc_ccitt_1d0f_val = update_crc_ccitt(crc_ccitt_1d0f_val, '\0');
+        }else
+            crc_ccitt_1d0f_val = update_crc_ccitt(crc_ccitt_1d0f_val, (unsigned char)*ptr);
 
-    return 0;
+        ptr++;
+    }
+
+    return crc_ccitt_1d0f_val;
 }
-

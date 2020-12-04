@@ -6,10 +6,12 @@
 #include <mutex>
 #include <fstream>
 
+#include "include/checksum.h"
+
 #define MAX_SEND 100
 #define ACK 10
 #define KA 16
-
+#define WINDOW 120
 
 #define CLIENT_INIT(address, port ) \
   Sender( address, port)
