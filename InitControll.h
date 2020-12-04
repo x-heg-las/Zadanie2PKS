@@ -4,6 +4,7 @@
 #include "Protocol.h"
 #include "include/checksum.h"
 #include <fstream>
+#include <unordered_map>
 
 
 #define BAD_INPUT -1
@@ -76,8 +77,7 @@ public:
 
 	Stream() {
 		streamnumber  = 0;
-		finished = 1;
-
+		finished = 0;
 	}
 
 	Stream(const Stream& str) {
@@ -92,30 +92,38 @@ public:
 	}
 
 	std::vector<Message> fragments;
-	std::vector<char> missing; 
+	std::vector<int> missing;
+	std::unordered_map<int, int> ack;
 	short streamnumber;
 	char finished;
 
 	void addFragment(Message msg) {
-		if (fragments.size() > msg.offset)
-			fragments.insert(fragments.begin() + msg.offset, msg);
-		else
-			fragments.insert(fragments.end(), msg);
-		
+
+		if (ack.find(msg.offset) == ack.end()) {
+			if (fragments.size() > msg.offset) {
+				fragments.insert(fragments.begin() + msg.offset, msg);
+			}
+			else
+				fragments.insert(fragments.end(), msg);
+		}
 	}
 
 	void initializeMissing(int lastSeq) {
-		missing = std::vector<char>(lastSeq + 1);
-		for (int i = 0; i <= lastSeq; i++) {
-			missing.at(i) = i;
+		if (!finished) {
+			missing = std::vector<int>(lastSeq + 1);
+			for (int i = 0; i <= lastSeq; i++) {
+				missing.at(i) = i;
+			}
+			finished = 1;
 		}
 
 	}
+
+
 };
 
 std::vector<char> requestPackets(Stream &stream);
 void analyzeHeader(header& protocol, char *buffer);
-bool check(message stream);
 int concat(std::vector<Stream>& streams, int id, char* buffer);
 char* arq(header &protocol, int len);
 int chooseService();

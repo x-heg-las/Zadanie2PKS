@@ -7,8 +7,8 @@
 typedef unsigned char u_int8_t;
 
 typedef struct {
+	u_int8_t resesend : 1;
 	u_int8_t reserved : 1;
-	u_int8_t reserved2 : 1;
 	u_int8_t name : 1; // fragment obsahuje meno subor
 	u_int8_t fragmented : 1;
 	u_int8_t ack : 1;

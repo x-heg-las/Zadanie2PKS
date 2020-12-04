@@ -81,61 +81,61 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
             return;
         }
         else {
-            
+
             printf("\nReceived packet from %s:%d", inet_ntoa(host.sin_addr), ntohs(host.sin_port));
 
             analyzeHeader(protocol, buffer);
-    
-            
+
+
 
             if (protocol.type.control) {
-                
+
                 if (protocol.flags.init) {
                     ptr = &transfered;
                     reference = protocol;
                     Stream incoming = Stream(reference.stream, 0);
 
-                    if (protocol.flags.name)
+                    if (protocol.flags.name && !protocol.flags.resesend)
                         namevec.push_back(incoming);
-                    else
+                    else if(!protocol.flags.resesend)
                         streams.push_back(incoming);
 
                 }
 
                 if (reply(host, host, buffer)) {
-                   
+
                     printf("\nServer : packet no. %d -> OK", protocol.seq);
-                  
+
                     if (protocol.type.binary && protocol.flags.name) {
-                        Stream *str; 
+                        Stream* str;
 
                         str = findStream(namevec, protocol.stream);
-                         
+
                         str->addFragment(Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
-                        
+
                         //neviem ci to je potrebne 
                         filenameSize += protocol.data_len;
 
-                        if (protocol.flags.quit ) {
+                        if (protocol.flags.quit) {
                             str->initializeMissing(protocol.seq);
-                            for (int i = 0; i < 2; i++) {
-                                if (!checkCompletition(namevec, protocol.stream)) {
 
-                                    std::vector<char> missing = requestPackets(*str);
-                                    header reference;
-                                    ZeroMemory(&reference, sizeof(reference));
+                            if (!checkCompletition(namevec, protocol.stream)) {
+                                /*
+                                std::vector<char> missing = requestPackets(*str);
+                                header reference;
+                                ZeroMemory(&reference, sizeof(reference));
 
-                                    reference.flags.retry = reference.type.control = reference.type.binary = 1;
-                                    for (auto member : missing)
-                                    {
-                                        reply(host, host, arq(reference, reference.seq));
-                                    }
-
-                                    std::this_thread::sleep_for(std::chrono::microseconds(50));
+                                reference.flags.retry = reference.type.control = reference.type.binary = 1;
+                                for (auto member : missing)
+                                {
+                                    reply(host, host, arq(reference, reference.seq));
                                 }
-                                else
-                                    break;
+
+                                std::this_thread::sleep_for(std::chrono::microseconds(50));
+                                */
                             }
+
+
                         }
                     }
                 }
@@ -143,87 +143,85 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     printf("\n\nServer : packet no. %d -> BAD", protocol.seq);
                     continue;
                 }
-                if(protocol.flags.name || !(protocol.type.text || protocol.type.binary))
+                if (protocol.flags.name || !(protocol.type.text || protocol.type.binary))
                     continue;
-            }else 
+            }
+            else
             {
-                reply(host, host, buffer);
-                printf("\n\nServer : packet no. %d -> OK", protocol.seq);
-                
-            }
-      
-            if (!protocol.flags.quit) {
+                if (reply(host, host, buffer))
+                    printf("\n\nServer : packet no. %d -> OK", protocol.seq);
+                else
+                    continue;
 
-                if (protocol.stream == lastStream)
-                {
-                    recent->addFragment( Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
-                }
-                else {
-
-                    recent = findStream(streams, protocol.stream);
-                    recent->addFragment( Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
-                }
             }
-            else {                 
+
+            if (protocol.stream == lastStream)
+            {
+                recent->addFragment(Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
+            }
+            else {
+
+                recent = findStream(streams, protocol.stream);
+                recent->addFragment(Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
+            }
+
+            
+          
+            if (protocol.flags.quit || recent->finished) {
                 //** prijmeme posledny paket komunikacie **//
 
-                   
-                Stream *str = findStream(streams, protocol.stream);
-                str->addFragment( Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq));
-                    
-
                 //////// toto oprav na zrozumitelnejsie ////////
-                str->initializeMissing(protocol.seq);
-                for(int i = 0; i < 2; i++){
-                    if (checkCompletition(streams, protocol.stream)) {
+                recent->initializeMissing(protocol.seq);
+                
+                if (checkCompletition(streams, protocol.stream)) {
 
-                                                                        std::cout << "saving" << std::endl;
+                                                                    std::cout << "saving" << std::endl;
 
-                        if (protocol.type.binary) {
-                            fileName = new char[filenameSize + 1];
+                if (protocol.type.binary) {
+                    fileName = new char[filenameSize + 1];
                                
-                            concat(namevec, protocol.stream, fileName);
-                            fileName[filenameSize] = '\0';
+                    concat(namevec, protocol.stream, fileName);
+                    fileName[filenameSize] = '\0';
                                
-                            int size = concat(streams, protocol.stream, filebuffer);
+                    int size = concat(streams, protocol.stream, filebuffer);
                                 
                                 
-                            //vytvorenie suboru
-                            std::ofstream file(fileName, std::ios::out | std::ios::binary | std::ios::app);
-                            file.write(filebuffer, size);
-                            file.close();
+                    //vytvorenie suboru
+                    std::ofstream file(fileName, std::ios::out | std::ios::binary | std::ios::app);
+                    file.write(filebuffer, size);
+                    file.close();
 
 
-                            delete[] fileName;
+                    //delete[] fileName;
                                 
-                        }
+                }
 
-                        if (protocol.type.text) {
-                            ZeroMemory(buffer, 512);
-                            concat(streams, protocol.stream, buffer);
-                            std::cout << buffer << std::endl;
-                        }
+                if (protocol.type.text) {
+                    ZeroMemory(buffer, 512);
+                    concat(streams, protocol.stream, buffer);
+                    std::cout << buffer << std::endl;
+                }
 
-                        break;
+                }
+                else {      // znovuvyziadanie spravy
+                  
+                    continue;
+
+                       /*
+                    std::vector<char> missing = requestPackets(*str);
+                    header reference;
+                    ZeroMemory(&reference, sizeof(reference));
+
+                    reference.flags.retry = reference.type.control = reference.type.binary = 1;
+                 
+                    for (auto member : missing)
+
+                    {
+                        reply(host, host, arq(reference, reference.seq));
                     }
-                    else {      // znovuvyziadanie spravy
-
-
-                        std::vector<char> missing = requestPackets(*str);
-                        header reference;
-                        ZeroMemory(&reference, sizeof(reference));
-
-                        reference.flags.retry = reference.type.control = reference.type.binary = 1;
-
-                        for (auto member : missing)
-
-                        {
-                            reply(host, host, arq(reference, reference.seq));
-                        }
-
-                        Sleep(150); /// what ? :D
-                    }
-                }                  
+                    */
+                }
+                                  
             }
         }
     }

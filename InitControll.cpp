@@ -63,15 +63,14 @@ int chooseService()
 }
 
 std::string getFilename()
-{
-       
+{       
         char filename[MAX_PATH];
 
         OPENFILENAME ofn;
         ZeroMemory(&filename, sizeof(filename));
         ZeroMemory(&ofn, sizeof(ofn));
         ofn.lStructSize = sizeof(ofn);
-        ofn.hwndOwner = NULL;  // If you have a window to center over, put its HANDLE here
+        ofn.hwndOwner = NULL; 
         ofn.lpstrFilter = (LPWSTR)"Text Files\0*.txt\0Any File\0*.*\0";
         ofn.lpstrFile = (LPWSTR)filename;
         ofn.nMaxFile = MAX_PATH;
@@ -87,9 +86,7 @@ std::string getFilename()
         }
         else
         {
-            // All this stuff below is to tell you exactly how you messed up above. 
-            // Once you've got that fixed, you can often (not always!) reduce it to a 'user cancelled' assumption.
-            switch (CommDlgExtendedError())
+                       switch (CommDlgExtendedError())
             {
             case CDERR_DIALOGFAILURE: std::cout << "CDERR_DIALOGFAILURE\n";   break;
             case CDERR_FINDRESFAILURE: std::cout << "CDERR_FINDRESFAILURE\n";  break;
@@ -152,21 +149,7 @@ void analyzeHeader(header& protocol, char* buffer) {
 
     return;
 }
-/*
-bool check(message stream)
-{
-    message* ptr = &stream;
 
-    int offset = 0;
-    while (ptr) {
-        if (ptr->offset != offset)
-            return false;
-        ptr = ptr->next;
-        offset++;
-    }
-    return true;
-}
-*/
 
 std::string loadIP()
 {
