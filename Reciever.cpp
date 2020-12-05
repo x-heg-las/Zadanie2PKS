@@ -32,18 +32,27 @@ bool reply(sockaddr_in host, sockaddr_in server, char* data) {
     else
         seq = -1;
 
+
+    if (protocol.type.keep_alive) {
+        protocol.flags.ack = 1;
+        sendto(client, arq(protocol, -1), HEADER_8, 0, (sockaddr*)&host, sizeof(host));
+        return true;
+    }
+
     ZeroMemory(&protocol, sizeof(protocol));
     protocol.type.len = size;
 
+
+
     if (sum == packetChecksum) {
         protocol.flags.ack = 1;
-        sendto(client, arq(protocol, seq), 12, 0, (sockaddr*)&host, sizeof(host));
+        sendto(client, arq(protocol, seq), HEADER_12, 0, (sockaddr*)&host, sizeof(host));
         return true;
     }
     else {
        
         protocol.flags.retry = 1;
-        sendto(client, arq(protocol, seq), 12, 0, (sockaddr*)&host, sizeof(host));
+        sendto(client, arq(protocol, seq), HEADER_12, 0, (sockaddr*)&host, sizeof(host));
         return false;
     }
 }
@@ -139,6 +148,8 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
                         }
                     }
+                    else if (protocol.type.keep_alive)
+                        continue;
                 }
                 else {
                     printf("\n\nServer : packet no. %d -> BAD", protocol.seq);

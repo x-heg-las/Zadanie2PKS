@@ -14,7 +14,7 @@
 #include <chrono>
 #include <assert.h>
 
-#include "include/checksum.h"
+#include "include/checksum.h" // netreba
 
 
 std::mutex free_to_send_mtx;
@@ -26,17 +26,19 @@ void keepAlive(sockaddr_in hostsockaddr, SOCKET conectionsocket) {
     struct fragment ka_message;
     ZeroMemory(&ka_message, sizeof(ka_message));
     ka_message.header.dataLength = 0;
+    ka_message.header.type.control = 1;
     ka_message.header.type.keep_alive = 1;
     char message[25] = { 0 };
     char recvbuf[25] = { 0 };
     int result;
+    char timeouts = 0;
+    header protocol;
 
-    BOOL bOptVal = FALSE;
-    int bOptLen = sizeof(BOOL);
+    ready.store(true);
 
     sockaddr_in addr_in;
     int slen = sizeof(addr_in);
-    int iOptVal = 15000;
+    int iOptVal = 500;
     int iOptLen = sizeof(int);
 
     setsockopt(conectionsocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&iOptVal, iOptLen);
@@ -45,19 +47,32 @@ void keepAlive(sockaddr_in hostsockaddr, SOCKET conectionsocket) {
     
     while (ready.load()) {
 
-
+        std::this_thread::sleep_for(std::chrono::milliseconds(14500));
         if (result = sendto(conectionsocket, message, HEADER_8, 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
 
-            std::cout << "Client : Failed to send data" << std::endl;
+            std::cout << "Client : Connetion lost!\n" << std::endl;
         }
 
-        if ((recvfrom(conectionsocket, (char*)recvbuf, 25, 0, (struct sockaddr*)&addr_in, &slen)) != SOCKET_ERROR){}
+        if ((recvfrom(conectionsocket, (char*)recvbuf, 25, 0, (struct sockaddr*)&addr_in, &slen)) != SOCKET_ERROR){
+        
+            analyzeHeader(protocol, recvbuf);
+            
+            if (protocol.flags.ack) {
 
+                printf("Client : Connected to %s:%d\n\n", inet_ntoa(addr_in.sin_addr), ntohs(addr_in.sin_port));
+                timeouts = 0;
+                continue;
+            }
+        }
+
+        timeouts++;
+        if (timeouts > 3) {
+           
+            printf("Client : Connection lost!\n\n");
+            ready.store(false);
+            return;
+        }
     }
-
-
-
-
 }
 
 void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
@@ -69,10 +84,7 @@ void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
     ready.store(true);
     int result = SOCKET_ERROR;
 
-    BOOL bOptVal = FALSE;
-    int bOptLen = sizeof(BOOL);
-
-    int iOptVal = 1000;
+    int iOptVal = 500;
     int iOptLen = sizeof(int);
     setsockopt(listenSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&iOptVal, iOptLen);
     ZeroMemory(buffer, 512);
@@ -434,7 +446,7 @@ void Sender::run()
         WSACleanup();
         return;
     }
-    
+    std::thread keepAlive_t;
      while (true) {
         char choice;
 
@@ -442,11 +454,15 @@ void Sender::run()
         std::cin >> choice;
         std::string msg, filename;
 
-        std::thread keepAlive_t;
 
         switch (choice) {
             case 't':
                 ready.store(false);
+
+                if (keepAlive_t.joinable()) {
+                    keepAlive_t.join();
+                }
+
                 std::cout << "Message : ";
                 std::getline(std::cin, msg);
                 if(msg.size() > 0)
@@ -456,6 +472,10 @@ void Sender::run()
                 break;
             case 'f' :
                 ready.store(false);
+
+                if (keepAlive_t.joinable()) {
+                    keepAlive_t.join();
+                }
 
                 filename = getFilename();
                 
@@ -470,6 +490,12 @@ void Sender::run()
                 std::cin >> fragment;
                 break;
             case 'e':
+                ready.store(false);
+
+                if (keepAlive_t.joinable()) {
+                    keepAlive_t.join();
+                }
+
                 closesocket(connectionSocket);
                 std::cout << "Client : client is shutting downn\nReturning to main screen..." << std::endl;
                 return;

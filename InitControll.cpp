@@ -144,7 +144,6 @@ void analyzeHeader(header& protocol, char* buffer) {
         protocol.seq = 0;
     if (protocol.type.len < 2) {
         protocol.data_len = 1;
-        protocol.stream ;
     }
 
     return;
