@@ -18,7 +18,7 @@ int main(int argc, char **argv) {
 	bool running = true;
 
 	while (running) {
-		std::cout << "Spustit ako : [sender(s) / reciever(r)]" << std::endl;
+		std::cout << "Spustit ako : [sender(s) / reciever(r) / ukoncit(u)]" << std::endl;
 
 		for (val = BAD_INPUT; val == BAD_INPUT; val = chooseService());
 
@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
 			unsigned long WSAAPI IP_addr;
 
 			for (IP_addr = INADDR_NONE; IP_addr == INADDR_NONE; IP_addr = inet_addr(loadIP().c_str()));  //TODO : skontroluj riadne to nacitavanie
-			for (port = 0; port < 1023 || port > 65535; port = loadPort());
+			for (port = 0; port < 1024 || port > 65535; port = loadPort());
 
 			Sender client = Sender(IP_addr, port);
 
@@ -47,6 +47,8 @@ int main(int argc, char **argv) {
 			client.run();
 			client.cleanup();
 		}
+		else if (val == 'u')
+			running = false;
 
 	}
 	

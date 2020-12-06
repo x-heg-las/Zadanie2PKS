@@ -264,13 +264,13 @@ int fragmentMessage( std::vector<fragment> &vec, struct fragment message, int le
 
     ptr = message;
     
-    for (int packed = 0; packed <= length; packed += (fragmentLength - reference.type.len * 4), fragments++) {
+    for (int packed = 0; packed < length; packed += (fragmentLength - reference.type.len * 4), fragments++) {
 
         int size = 0;
 
         ptr.header = reference;
 
-        if ((length - packed) >= fragmentLength - (reference.type.len * 4))
+        if ((length - packed) > fragmentLength - (reference.type.len * 4))
             size = fragmentLength - (reference.type.len * 4);
         else {
             size = length - packed ;

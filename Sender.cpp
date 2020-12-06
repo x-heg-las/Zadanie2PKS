@@ -749,7 +749,7 @@ void Sender::run()
         WSACleanup();
         return;
     }
-    int errPkt = 0, err = 0,streamnum;
+    int errPkt = 0, err = 0,streamnum, frag;
     std::string data;
     std::thread keepAlive_t;
      while (true) {
@@ -790,7 +790,7 @@ void Sender::run()
             ready.store(false);
      
             _resullt = BAD_INPUT;
-                filename = getFilename();
+            filename = getFilename();
 
             
                 if (keepAlive_t.joinable()) {
@@ -812,7 +812,11 @@ void Sender::run()
                 
                 break;
             case 'l':
-                std::cin >> fragment;
+                frag = 0;
+                for (int i = BAD_INPUT; frag < 13 || frag > MAX_FRAG; std::cin >> frag) {
+                    printf("\nZadam maximalnu velkost fragmentu [13 - 1456] (z toho 12 B pre hlavicku) : ");
+                }
+                fragment = frag;
                 break;
             case 'e':
                 printf("Zadaj cislo k ( kazdy k-ty fragment posielaneho suboru bude poskodeny): ");
@@ -836,34 +840,7 @@ void Sender::run()
 
         }
 
-        if (_resullt == SOCKET_ERROR) {
-            std::cout << "Error : client is shutting down" << std::endl;
-        }
-
-     }
-
-    if (_resullt == SOCKET_ERROR)
-    {
-       _resullt =  WSAGetLastError();
-        closesocket(connectionSocket);
-        connectionSocket = INVALID_SOCKET;
-    }
-    else 
-    {
-        std::cout << "Client : connected to server" << std::endl;
-    
-
-
-    }
-
-    if (connectionSocket == INVALID_SOCKET)
-    {
-        std::cout << "Unable to connect to reciever" << std::endl;
-        WSACleanup();
-        return;
-    }
-
-    
+     }    
 }
 
 void Sender::cleanup()

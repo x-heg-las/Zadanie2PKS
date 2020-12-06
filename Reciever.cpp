@@ -111,7 +111,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                 if (protocol.flags.init) {
                     ptr = &transfered;
                     reference = protocol;
-                    Stream incoming = Stream(reference.stream, 0);
+                    Stream incoming = Stream(reference.stream, protocol.stream);
                     Stream* str;
 
                         if (protocol.flags.name && !protocol.flags.resesend) {
@@ -176,8 +176,18 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     
 
             }
-
             Message mesg = Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq);
+            
+            if (protocol.flags.name) {
+                Stream* str;
+                str = findStream(namevec, protocol.stream);
+                str->addFragment(mesg);
+                filenameSize += protocol.data_len;
+                continue;
+            }
+
+
+            
             if (protocol.stream == lastStream)
             {
                 recent->addFragment(mesg);
