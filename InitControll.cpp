@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <windows.h>
 #include <fstream>
+#include <string.h>
 
 int concat(std::vector<Stream> &streams, int id, char *buffer)
 {
@@ -110,6 +111,19 @@ std::string getFilename()
     return "" ;
 }
 
+char* saveFileTo(char* filename)
+{
+    
+}
+
+void freeData(std::vector<fragment>& data)
+{
+
+    for (auto& mem : data) {
+        delete[] mem.data;
+    }
+}
+
 std::vector<char>  requestPackets(Stream& stream)
 {
     std::vector<char> missing;
@@ -160,6 +174,18 @@ std::string loadIP()
 
     return input;
 }
+
+
+unsigned short loadPort() {
+
+    unsigned short val;
+    std::cout << "Zadaj cislo portu [1024 - 65535]:" << std::endl;
+
+    std::cin >> val;
+
+    return val;
+}
+ 
 
 void copyHeader(char* data, Protocol header) {
 

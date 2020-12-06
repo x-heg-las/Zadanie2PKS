@@ -20,11 +20,16 @@
 std::mutex free_to_send_mtx;
 std::atomic<bool> ready;
 
+/// <summary>
+/// Keepalive funkcia je spustena vzdy po preneseni subou pre udrzanie spojenia medzi klientom a serverom.
+/// Keepalive spravy su posielane kazdych 15 sekund. Ak server neodpovie 3x po sebe, tak sa spojenie uzavrie.
+/// </summary>
 void keepAlive(sockaddr_in hostsockaddr, SOCKET conectionsocket) {
 
-    
     struct fragment ka_message;
     ZeroMemory(&ka_message, sizeof(ka_message));
+
+    //inicializacia hlavicky spravy
     ka_message.header.dataLength = 0;
     ka_message.header.type.control = 1;
     ka_message.header.type.keep_alive = 1;
@@ -38,19 +43,22 @@ void keepAlive(sockaddr_in hostsockaddr, SOCKET conectionsocket) {
 
     sockaddr_in addr_in;
     int slen = sizeof(addr_in);
-    int iOptVal = 500;
+    int iOptVal = 50;
     int iOptLen = sizeof(int);
 
+    //nastavenie timeoutu na prijatie paketu
     setsockopt(conectionsocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&iOptVal, iOptLen);
     
     copyHeader(message, ka_message.header);
     
     while (ready.load()) {
 
-        std::this_thread::sleep_for(std::chrono::milliseconds(14500));
+        //cakaj 15 sekund pred odoslanim spravy
+        std::this_thread::sleep_for(std::chrono::milliseconds(15000));
         if (result = sendto(conectionsocket, message, HEADER_8, 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
 
-            std::cout << "Client : Connetion lost!\n" << std::endl;
+            std::cout << "Client : Connetion lost!... connection closed\n" << std::endl;
+            return;
         }
 
         if ((recvfrom(conectionsocket, (char*)recvbuf, 25, 0, (struct sockaddr*)&addr_in, &slen)) != SOCKET_ERROR){
@@ -59,15 +67,15 @@ void keepAlive(sockaddr_in hostsockaddr, SOCKET conectionsocket) {
             
             if (protocol.flags.ack) {
 
-                printf("Client : Connected to %s:%d\n\n", inet_ntoa(addr_in.sin_addr), ntohs(addr_in.sin_port));
+                printf("Client : Connected to %s\n\n", inet_ntoa(addr_in.sin_addr));
                 timeouts = 0;
                 continue;
             }
         }
 
+        //ak neprijmeme potvrdenie
         timeouts++;
         if (timeouts > 3) {
-           
             printf("Client : Connection lost!\n\n");
             ready.store(false);
             return;
@@ -75,25 +83,31 @@ void keepAlive(sockaddr_in hostsockaddr, SOCKET conectionsocket) {
     }
 }
 
+/// <summary>
+/// Funkcia pre prijimanie sprav(odpovedi) od servera. 
+/// Odpovedami su ACK a RETRY spravy
+/// </summary>
 void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
     
-    char buffer[512] = { 0 };
+    char buffer[128] = { 0 };
     sockaddr_in addr_in;
     int slen = sizeof(addr_in);
     header protocol;
+
     ready.store(true);
     int result = SOCKET_ERROR;
 
-    int iOptVal = 500;
+    int iOptVal = 1000; // timeut na prijatie spravy 500 ms
     int iOptLen = sizeof(int);
+
+    //upravenie timeoutu pre prijatie sprav od servera
     setsockopt(listenSocket, SOL_SOCKET, SO_RCVTIMEO, (char*)&iOptVal, iOptLen);
-    ZeroMemory(buffer, 512);
+    ZeroMemory(buffer, 128);
   
+    //cyklus iteruje dokial je premenna ready nastavena na true
     while (ready.load()) {
 
-        
-      
-        if ( (recvfrom(listenSocket, (char*)buffer, 512, 0, (struct sockaddr*)&addr_in, &slen)) != SOCKET_ERROR) {
+        if ((recvfrom(listenSocket, (char*)buffer, 128, 0, (struct sockaddr*)&addr_in, &slen)) != SOCKET_ERROR) {
             
             analyzeHeader(protocol, buffer);
 
@@ -102,24 +116,35 @@ void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
                 free_to_send_mtx.lock();
                 seq.erase(protocol.seq);
                 free_to_send_mtx.unlock();
-            }
-            
-
+            }          
         }
     }
-
 }
-//oprav arq
+
+/// <summary>
+///     Funkcia pre nadviazanie spojenia so serverom. Tato funkcia je volana len pri posielani suboru.
+///     Pocas nadviazania komunikacie sa posiela nazov suboru, ktory posielame.
+/// </summary>
+/// <param name="filePath">
+///     Absolutna cesta k suboru, ktory sa posiela.
+/// </param>
+/// <param name="fragmentLength">
+///     Nastavena max. velkost fragmentu.
+/// </param>
+/// <param name="host"></param>
+/// <param name="socket"></param>
+/// <returns>
+///     Pocet odoslanych fragmentov. Ak sa nepodarilo nadviazat spojenie vrati -1.
+/// </returns>
 int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, SOCKET socket) {
 
     struct fragment stream;
-   
-  
+     
     ZeroMemory(&stream, sizeof(stream));
-    char* fileBuffer = new char[ MAX_PATH];
-    ZeroMemory(fileBuffer,  MAX_PATH);
+    char fileBuffer[MAX_PATH] = { 0 };
     int result, frg_sent = 0 ;
 
+    //vyrezanie sazvu suboru z absolutnej cesty
     std::string fileName = filePath.substr(filePath.find_last_of("/\\") + 1);
 
     memcpy(fileBuffer, fileName.c_str(), fileName.length() + 1);
@@ -135,67 +160,143 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
 
     fragmentMessage(data, stream, fileName.length(), fileBuffer, fragmentLength, NAME);
 
-   std::thread listening(recieveMessage, socket, ACK, std::ref(unrecieved));
-
+    std::thread listening(&recieveMessage, socket, ACK, std::ref(unrecieved));
 
     for(struct fragment &msg : data) {
 
         unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
+
         if (result = sendto(socket, msg.data, (msg.header.dataLength + msg.header.type.len * 4), 0, (struct sockaddr*)&host, sizeof(host)) == SOCKET_ERROR) {
 
-            std::cout << "Client : Failed to send data" << std::endl;
+            std::cout << "Client : Failed to send data... connection closed" << std::endl;
+            ready.store(false);
+
+            if (listening.joinable())
+                listening.join();
+            freeData(data);
+           
+            return -1;
         }
         else {
+            printf("Cient : sending packet... size:%d B (header %d B)\n\n", msg.header.dataLength + msg.header.type.len * 4, msg.header.type.len * 4);
             frg_sent++;
         }
-        if (!(frg_sent%120) && !unrecieved.empty()) {//window
-            // toto sa da este upraavit
-            
-            for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
 
-                //modifikacia dat - nastavenie retry flagu
-                *((unsigned char*)data.at(it->first).data) |= (1);
-                //nove crc pre zmenene data
-                unsigned short newCrc = crc(data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4));
-                //zmena crc v hlavicke so zmenenym flagom
-                *((unsigned short*)data.at(it->first).data + 1) = newCrc;
+        if (!(frg_sent % WINDOW)) {
+            int resend = 0;
 
-                if (result = sendto(socket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&host, sizeof(host)) == SOCKET_ERROR) {
+            while (!unrecieved.empty()) {
 
-                    std::cout << "Client : Failed to send data" << std::endl;
+                if (resend == 2){
+                    printf("Client : No response .. connection closed");
+                    ready.store(false);
+
+                    if (listening.joinable())
+                        listening.join();
+                    freeData(data);
+                    return -1;
                 }
+
+                resend++;
+                free_to_send_mtx.lock();
+                for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
+
+                    //modifikacia dat - nastavenie retry flagu
+                    *((unsigned char*)data.at(it->first).data) |= (1);
+                    //nove crc pre zmenene data
+                    unsigned short newCrc = crc(data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4));
+                    //zmena crc v hlavicke so zmenenym flagom
+                    *((unsigned short*)data.at(it->first).data + 1) = newCrc;
+
+                    if (result = sendto(socket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&host, sizeof(host)) == SOCKET_ERROR) {
+
+                        std::cout << "Client : Failed to send data... connection closed" << std::endl;
+                        ready.store(false);
+
+                        if (listening.joinable())
+                            listening.join();
+                        free_to_send_mtx.unlock();
+                        freeData(data);
+                        return -1;
+                    }
+                    else {
+                        printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                        frg_sent++;
+                    }
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+                }
+                free_to_send_mtx.unlock();
+
+                //pocka na potvrdzovacie spravy
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
             }
         }
-
+        std::this_thread::sleep_for(std::chrono::milliseconds(3));
     }
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+  
+    int resend = 0;
+    while (!unrecieved.empty()) {
+        
+        if (resend == 2) {
+            printf("Client : No response .. connection closed");
+            ready.store(false);
 
-    if (!unrecieved.empty()) {
-
+            if (listening.joinable())
+                listening.join();
+            freeData(data);
+            return -1;
+        }
+        resend++;
+        free_to_send_mtx.lock();
         for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
+
+            //modifikacia dat - nastavenie retry flagu
+            *((unsigned char*)data.at(it->first).data) |= (1);
+            //nove crc pre zmenene data
+            unsigned short newCrc = crc(data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4));
+            //zmena crc v hlavicke so zmenenym flagom
+            *((unsigned short*)data.at(it->first).data + 1) = newCrc;
+
             if (result = sendto(socket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&host, sizeof(host)) == SOCKET_ERROR) {
 
-                std::cout << "Client : Failed to send data" << std::endl;
+                std::cout << "Client : Failed to send data... connection closed" << std::endl;
+        
+                ready.store(false);
+
+                if (listening.joinable())
+                    listening.join();
+                free_to_send_mtx.unlock();
+                freeData(data);
+                return -1;
             }
+            else {
+                printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                frg_sent++;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(3));
         }
+        free_to_send_mtx.unlock();
+        //pocka na potvrdzovacie spravy
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
 
     ready.store(false);
-    
+    if(listening.joinable())
+        listening.join();
+    freeData(data);
+    return frg_sent;
+} 
 
-    listening.join();
-
-
-    return 0;
-}  // oprav arq
-
-int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket)
+int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket, int errPacket)
 {
 
     std::ifstream fileInput(filePath, std::ifstream::in | std::ifstream::binary);
     
     struct fragment stream;
+
+    //Zistenie velkosti suboru
     fileInput.seekg(0, fileInput.end);
     int fileSize = fileInput.tellg() , result = SOCKET_ERROR;
     fileInput.seekg(0, fileInput.beg);
@@ -204,6 +305,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
     char* fileBuffer = new char[fileSize + MAX_PATH];
     ZeroMemory(fileBuffer, fileSize + MAX_PATH);
    
+    //zistenie velkosti potrebnej hlavicky a jej nasledne inicializovanie
     if (fileSize + HEADER_8 > fragmentLen) {
         
         stream.header.flags.fragmented = 1;
@@ -215,7 +317,6 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
         stream.header.type.binary = 1;
     }
 
-    
     fileInput.read(fileBuffer , static_cast<std::streamsize>(fileSize));
     std::vector<struct fragment> data;
 
@@ -226,43 +327,58 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
     
     char change;
     int frg_sent = 0;
+
     for(struct fragment &msg : data){
         unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
 
-        
-        if (msg.header.sequenceNumber%70 == 25)
+        //Poskodenie dat datagramu
+        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket)
         {
-            change = *(msg.data + 18);
-            *(msg.data+ 18) = '#';
+            change = *(msg.data + msg.header.type.len*4 + 3);
+            *(msg.data + msg.header.type.len * 4 + 3) += 1;
         }
-
-
-        
 
 
         if (result = sendto(connectionSocket, msg.data, (msg.header.dataLength + msg.header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
         
             std::cout << "Client : Failed to send data" << std::endl;
+            ready.store(false);
+
+            if (listening.joinable())
+                listening.join();
+            freeData(data);
+            return -1;
 
         }
         else {
+            printf("Cient : sending packet... size:%d B (header %d B)\n\n", msg.header.dataLength + msg.header.type.len * 4, msg.header.type.len * 4);
             frg_sent++;
         }
        
-
-        if (msg.header.sequenceNumber % 70 == 25) {
-            *(msg.data + 18) = change;
-
-
+        //Naprava poskodenej casti datagramu
+        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket) {
+            *(msg.data + msg.header.type.len * 4 + 3) = change;
         }
+
         //std::this_thread::sleep_for(std::chrono::microseconds(250));
         std::this_thread::sleep_for(std::chrono::milliseconds(3));
-        for(int i = 0; i < 2 && !(frg_sent%WINDOW); i++){
+       
+        if (!(frg_sent % WINDOW)) {// ak sme poslali zadany pocet fragmetov
+            int resend = 0;
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(5)); // pockame chvilu na oneskorene pakety
+            while (!unrecieved.empty()) {
 
-            if (!unrecieved.empty()) {//window  // potom skus ten mutex co spravi :)
+                if (resend == 2) {
+                    printf("Client : No response .. connection closed");
+                    ready.store(false);
 
+                    if (listening.joinable())
+                        listening.join();
+                    freeData(data);
+                    return -1;
+                }
+
+                resend++;
                 free_to_send_mtx.lock();
                 for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
 
@@ -275,18 +391,45 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
 
                     if (result = sendto(connectionSocket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
 
-                        std::cout << "Client : Failed to send data" << std::endl;
+                        std::cout << "Client : Failed to send data... connection closed" << std::endl;
+                        ready.store(false);
+
+                        if (listening.joinable())
+                            listening.join();
+                        free_to_send_mtx.unlock();
+                        freeData(data);
+                        return -1;
                     }
+                    else {
+                        printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                        frg_sent++;
+                    }
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(3));
                 }
                 free_to_send_mtx.unlock();
+
+                //pocka na potvrdzovacie spravy
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
             }
         }
-                
-        
     }
   
-    
-    if (!unrecieved.empty()) {
+    int resend = 0; 
+    while (!unrecieved.empty()) {
+
+        if (resend == 2) {
+            printf("Client : No response .. connection closed");
+
+            ready.store(false);
+            if (listening.joinable())
+                listening.join();
+            freeData(data);
+            return -1;
+        }
+
+        resend++;
+
         free_to_send_mtx.lock();
         for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
             
@@ -301,51 +444,209 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
             if (result = sendto(connectionSocket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
 
                 std::cout << "Client : Failed to send data" << std::endl;
+               
+
+                ready.store(false);
+
+                if (listening.joinable())
+                    listening.join();
+                free_to_send_mtx.unlock();
+                freeData(data);
+                return -1;
+            }
+            else {
+                printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                frg_sent++;
             }
         }
         free_to_send_mtx.unlock();
+
+        //pocka na potvrdzovacie spravy
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
 
     ready.store(false);
 
+    if(listening.joinable())
+        listening.join();
 
-    listening.join();
-    printf("POSLANYCH :  %d \n", frg_sent);
-    // este neak uvolnovanie dat zabezpeciit 
-    return 1;
+    
+    delete[] fileBuffer;
+    freeData(data);
+    return frg_sent;
 }
 
-int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int type) // type nemusi byt
+int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int errPacket) 
 {
     int len = message.length();
-    int result;
+    int result,frg_sent = 0;
     struct fragment stream;
     ZeroMemory(&stream, sizeof(stream));
-
+    char change;
+    std::map<int, int> unrecieved;
     std::vector<struct fragment> data;
 
-  //  if ((len+1) + HEADER_8 > fragmentLen) {
+    //zistenie velkosti potrebnej hlavicky a jej nasledne inicializovanie
+    if (len+1 + HEADER_8 > fragmentLen) {
 
         stream.header.flags.fragmented = 1;
         stream.header.type.len = 3;
         stream.header.type.text = 1;
+    }
+    else {
+        stream.header.type.len = 2;
+        stream.header.type.text = 1;
+    }
+    
+    fragmentMessage(data, stream, len + 1, (char*)message.c_str(), fragmentLen, TEXTM); // len+1 aby sa odoslal aj '\0' znak
+    std::thread listening(&recieveMessage, connectionSocket, ACK, std::ref(unrecieved));
+
+    for (struct fragment& msg : data) {
         
-  
+        
+       
+        unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
 
-        fragmentMessage(data ,stream, len+1, (char*)message.c_str(), fragmentLen, TEXTM);
-        int cnt = 0;
-        for(auto &msg : data) {
-            
-            if (result = sendto(connectionSocket, msg.data, (msg.header.dataLength + msg.header.type.len*4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
-                
-                std::cout << "Client :fragment send error" << std::endl;
-
-            }
-            cnt++;
+        //Poskodenie dat datagramu
+        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket)
+        {
+            change = *(msg.data + msg.header.type.len * 4 + 3);
+            *(msg.data + msg.header.type.len * 4 + 3) += 1;
         }
-        printf("POSLANYCH : _%d", cnt);
-        
-    return 0;
+
+
+        if (result = sendto(connectionSocket, msg.data, (msg.header.dataLength + msg.header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
+
+            std::cout << "Client : Failed to send data" << std::endl;
+
+            ready.store(false);
+            if (listening.joinable()) {
+                listening.join();
+            }
+            freeData(data);
+            return -1;
+
+        }
+        else {
+            printf("Cient : sending packet... size:%d B (header %d B)\n\n", msg.header.dataLength + msg.header.type.len * 4, msg.header.type.len * 4);
+            frg_sent++;
+        }
+
+        //Naprava poskodenej casti datagramu
+        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket) {
+            *(msg.data + msg.header.type.len * 4 + 3) = change;
+        }
+
+        //std::this_thread::sleep_for(std::chrono::microseconds(250));
+        std::this_thread::sleep_for(std::chrono::milliseconds(3));
+
+        if (!(frg_sent % WINDOW)) {// ak sme poslali zadany pocet fragmetov
+            int resend = 0;
+
+            while (!unrecieved.empty()) {
+
+                if (resend == 2) {
+                    printf("Client : No response .. connection closed");
+                    ready.store(false);
+                    if (listening.joinable()) {
+                        listening.join();
+                    }
+                    freeData(data);
+                    return -1;
+                }
+
+                resend++;
+                free_to_send_mtx.lock();
+                for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
+
+                    //modifikacia dat - nastavenie retry flagu
+                    *((unsigned char*)data.at(it->first).data) |= (1);
+                    //nove crc pre zmenene data
+                    unsigned short newCrc = crc(data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4));
+                    //zmena crc v hlavicke so zmenenym flagom
+                    *((unsigned short*)data.at(it->first).data + 1) = newCrc;
+
+                    if (result = sendto(connectionSocket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
+
+                        std::cout << "Client : Failed to send data... connection closed" << std::endl;
+                        ready.store(false);
+                        if (listening.joinable()) {
+                            listening.join();
+                        }
+                        free_to_send_mtx.unlock();
+                        freeData(data);
+                        return -1;
+                    }
+                    else {
+                        printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                        frg_sent++;
+                    }
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+                }
+                free_to_send_mtx.unlock();
+
+                //pocka na potvrdzovacie spravy
+                std::this_thread::sleep_for(std::chrono::milliseconds(250));
+            }
+        }
+    }
+
+    int resend = 0;
+    while (!unrecieved.empty()) {
+
+        if (resend == 2) {
+            printf("Client : No response .. connection closed");
+            ready.store(false);
+            if (listening.joinable()) {
+                listening.join();
+            }
+            freeData(data);
+            return -1;
+        }
+
+        resend++;
+
+        free_to_send_mtx.lock();
+        for (std::map<int, int>::iterator it = unrecieved.begin(); it != unrecieved.end(); ++it) {
+
+            //modifikacia dat - nastavenie retry flagu
+            *((unsigned char*)data.at(it->first).data) |= (1);
+            //nove crc pre zmenene data
+            unsigned short newCrc = crc(data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4));
+            //zmena crc v hlavicke so zmenenym flagom
+            *((unsigned short*)data.at(it->first).data + 1) = newCrc;
+
+
+            if (result = sendto(connectionSocket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
+
+                std::cout << "Client : Failed to send data" << std::endl;
+                ready.store(false);
+                if (listening.joinable()) {
+                    listening.join();
+                }
+                freeData(data);
+                free_to_send_mtx.unlock();
+                return -1;
+            }
+            else {
+                printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                frg_sent++;
+            }
+        }
+        free_to_send_mtx.unlock();
+
+        //pocka na potvrdzovacie spravy
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+    }
+
+    ready.store(false);
+    if (listening.joinable()) {
+        listening.join();
+    }
+
+    freeData(data);
+    return frg_sent;
 }
 
 
@@ -353,7 +654,6 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
 
 void Sender::wakeUp()
 {
-
 
 	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
 	{
@@ -365,21 +665,18 @@ void Sender::wakeUp()
     else
     {
 
-        printf("The Winsock dll found!\n");
+        printf("DEBUG : The Winsock dll found!\n");
 
-        printf("The current status is: %s.\n", wsaData.szSystemStatus);
+        printf("DEBUG : The current status is: %s.\n", wsaData.szSystemStatus);
 
     }
-
-
-
 
     if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2) 
     {
 
         //Tell the user that we could not find a usable WinSock DLL
 
-        printf("The dll do not support the Winsock version %u.%u!\n",
+        printf("DEBUG : The dll do not support the Winsock version %u.%u!\n",
 
             LOBYTE(wsaData.wVersion), HIBYTE(wsaData.wVersion));
 
@@ -397,15 +694,13 @@ void Sender::wakeUp()
 
     {
 
-        printf("The dll supports the Winsock version %u.%u!\n", LOBYTE(wsaData.wVersion),
+        printf("DEBUG : The dll supports the Winsock version %u.%u!\n", LOBYTE(wsaData.wVersion),
 
             HIBYTE(wsaData.wVersion));
 
-        printf("The highest version this dll can support: %u.%u\n", LOBYTE(wsaData.wHighVersion),
+        printf("DEBUG : The highest version this dll can support: %u.%u\n", LOBYTE(wsaData.wHighVersion),
 
             HIBYTE(wsaData.wHighVersion));
-
-        // Setup Winsock communication code here
 
         return ;
 
@@ -415,11 +710,6 @@ void Sender::wakeUp()
 void Sender::run()
 {
     int _resullt = 0;
-
-
-
-    const char * message = "this is a mesage that i want to send bla bah blah baaa je tiooto skoro koniec uzz teraz fakt. tu :D";
-    char recieveBuffer[1000];
 
     ZeroMemory(&hints, sizeof(hints));
 
@@ -431,7 +721,7 @@ void Sender::run()
     sockaddr_in host;
 
     host.sin_family = AF_INET;
-    host.sin_addr.S_un.S_addr = inet_addr("127.0.0.1");
+    host.sin_addr.S_un.S_addr = hostsockaddr.sin_addr.s_addr;
     
     connectionSocket = socket(hints.ai_family, hints.ai_socktype, IPPROTO_UDP);
 
@@ -453,7 +743,7 @@ void Sender::run()
         std::cout << "help : [t] (text message) [f] (file) [e] (shutdown) [l] (nastav velkost fragmentu)" << std::endl;
         std::cin >> choice;
         std::string msg, filename;
-
+        int errPkt = 0;
 
         switch (choice) {
             case 't':
@@ -464,7 +754,7 @@ void Sender::run()
                 }
 
                 std::cout << "Message : ";
-                std::getline(std::cin, msg);
+                std::cin >> msg;
                 if(msg.size() > 0)
                     _resullt = sendMessage(msg, fragment, hostsockaddr, connectionSocket, TEXTM);
 
@@ -479,12 +769,14 @@ void Sender::run()
 
                 filename = getFilename();
                 
-                _resullt = connect(filename, fragment, hostsockaddr, connectionSocket);
+                if (!filename.empty())//osetri otvaranie suboru
+                    _resullt = connect(filename, fragment, hostsockaddr, connectionSocket);
 
-                _resullt = sendFile(filename, fragment, hostsockaddr, connectionSocket);
+                if(_resullt > 0)
+                    _resullt = sendFile(filename, fragment, hostsockaddr, connectionSocket, errPkt);
+                if(_resullt > 0)
+                    keepAlive_t = std::thread(&keepAlive, hostsockaddr, connectionSocket);
 
-
-                keepAlive_t = std::thread(&keepAlive, hostsockaddr, connectionSocket);
                 break;
             case 'l':
                 std::cin >> fragment;
@@ -507,13 +799,6 @@ void Sender::run()
         }
 
      }
-
-  //send the message
-    if (sendto(connectionSocket, message, strlen(message), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR)
-    {
-        printf("sendto() failed with error code : %d", WSAGetLastError());
-        exit(EXIT_FAILURE);
-    }
 
     if (_resullt == SOCKET_ERROR)
     {
@@ -546,4 +831,5 @@ void Sender::cleanup()
 	{
 		std::cout << "Error : WSACleanup failed " + WSAGetLastError();
 	}
+
 }

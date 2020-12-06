@@ -6,6 +6,7 @@
 #include <fstream>
 #include <unordered_map>
 
+#define MAX_FRAG 1456
 
 #define BAD_INPUT -1
 #define SENDER 's'
@@ -30,11 +31,11 @@ struct message {
 	int offset;
 	short len;
 	short stream;
-	message* next;
+	//message* next;
 };
 
 struct stream {
-	message* data;
+	//message* data;
 	short streamNumber;
 	char finished;
 };
@@ -77,7 +78,7 @@ public:
 		msg.data = nullptr;
 	}
 	
-	Message& operator=(Message&& msg)  {
+	Message& operator=(Message&& msg) noexcept  {
 		if (this != &msg) {
 			delete[] data;
 		}
@@ -152,6 +153,7 @@ public:
 
 };
 
+void freeData(std::vector<fragment>& data);
 std::vector<char> requestPackets(Stream &stream);
 void analyzeHeader(header& protocol, char *buffer);
 void copyHeader(char* data, Protocol header);
@@ -159,6 +161,8 @@ int concat(std::vector<Stream>& streams, int id, char* buffer);
 char* arq(header &protocol, int len);
 int chooseService();
 std::string getFilename();
+char* saveFileTo(char* filename);
+unsigned short loadPort();
 std::string loadIP();
 Stream *findStream(std::vector<Stream> &streams, short id);
 int fragmentMessage(std::vector<fragment> & fragments,struct fragment message, int length, char* data, int fragmentLength, int type);

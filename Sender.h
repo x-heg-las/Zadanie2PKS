@@ -30,7 +30,7 @@ class Sender
 			fragment = 1000;
 			hostsockaddr.sin_family = AF_INET; 
 			hostsockaddr.sin_port = htons(_port);
-			hostsockaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+			hostsockaddr.sin_addr.s_addr = addr;
 
 		}
 
@@ -45,7 +45,7 @@ class Sender
 		static constexpr int maxFragment = 1000;
 		unsigned long ip;
 		static int sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int type);
-		static int sendFile(std::string fileName, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket);
+		static int sendFile(std::string fileName, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket, int errPacket);
 		static int connect(std::string fileName, int fragmentLength, sockaddr_in host, SOCKET socket);
 		void wakeUp();
 		void run();

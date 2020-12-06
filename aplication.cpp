@@ -13,49 +13,42 @@
 
 int main(int argc, char **argv) {
 
-	int port;
+	unsigned short port = 0;
 	char val;
+	bool running = true;
 
-	std::cout << "Spustit ako : [sender(s) / reciever(r)]" << std::endl;
-	
-	for (val = BAD_INPUT; val == BAD_INPUT; val = chooseService());
+	while (running) {
+		std::cout << "Spustit ako : [sender(s) / reciever(r)]" << std::endl;
 
-
-	if (val == RECIEVER) 
-	{
-	
+		for (val = BAD_INPUT; val == BAD_INPUT; val = chooseService());
 
 
-		Reciever server = Reciever(48514);
+		if (val == RECIEVER) {
 
-		server.wakeUp();
-		server.run();
+			for (port = 0; port < 1024 || port > 65535; port = loadPort());
 
+			Reciever server = Reciever(port);
 
+			server.wakeUp();
+			server.run();
+			server.cleanup();
 
+		}
+		else if (val == SENDER) {
 
-	
+			unsigned long WSAAPI IP_addr;
+
+			for (IP_addr = INADDR_NONE; IP_addr == INADDR_NONE; IP_addr = inet_addr(loadIP().c_str()));  //TODO : skontroluj riadne to nacitavanie
+			for (port = 0; port < 1023 || port > 65535; port = loadPort());
+
+			Sender client = Sender(IP_addr, port);
+
+			client.wakeUp();
+			client.run();
+			client.cleanup();
+		}
 
 	}
-	else if (val == SENDER) 
-	{
-
-		//getFilename();
-		
-		unsigned long WSAAPI IP_addr;
-
-		for(IP_addr = INADDR_NONE; IP_addr == INADDR_NONE; IP_addr = inet_addr("127.0.0.1"));  //TODO : skontroluj riadne to nacitavanie
-
-		//Sender client = CLIENT_INIT(IP_addr, 48514);
-
-		Sender client = Sender(IP_addr, 48514);
-		
-		client.wakeUp();
-		client.run();
-		
-	}
-
-
 	
 	return 0;
 }

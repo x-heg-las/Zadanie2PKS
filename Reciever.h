@@ -16,6 +16,7 @@ public:
 	struct sockaddr_in socketi;
 	void wakeUp();
 	void run();
+	void cleanup();
 	bool alive;
 	WSADATA wsaData;
 

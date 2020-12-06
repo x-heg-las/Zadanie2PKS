@@ -13,7 +13,7 @@
 
 #include "include/checksum.h"
 
-#define MAX_FILE 2100000
+#define MAX_FILE 2500000
 #pragma comment(lib,"ws2_32.lib")
 
 bool reply(sockaddr_in host, sockaddr_in server, char* data) {
@@ -59,7 +59,7 @@ bool reply(sockaddr_in host, sockaddr_in server, char* data) {
 
 void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
-    char* buffer = new char [MAX_FILE];
+    char* buffer = new char [MAX_FRAG];
     int slen ;
     char* filebuffer = new char[MAX_FILE];
      
@@ -82,11 +82,9 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
     ZeroMemory(&dataFlow, sizeof(dataFlow));
     while (true) {
         
-      //  ZeroMemory(buffer, 1000);
+        if ((recvfrom(listenSocket, (char*)buffer, MAX_FRAG, 0, (struct sockaddr*)&host, &slen)) == SOCKET_ERROR) {
 
-        if ((recvfrom(listenSocket, (char*)buffer, 1000, 0, (struct sockaddr*)&host, &slen)) == SOCKET_ERROR) {
-
-            std::cout << "Server : connection lost";
+            printf("Server : connection lost # %d", WSAGetLastError());
             return;
         }
         else {
@@ -94,8 +92,6 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
             printf("\nReceived packet from %s:%d", inet_ntoa(host.sin_addr), ntohs(host.sin_port));
 
             analyzeHeader(protocol, buffer);
-
-
 
             if (protocol.type.control) {
 
@@ -113,7 +109,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
                 if (reply(host, host, buffer)) {
 
-                    printf("\nServer : packet no. %d -> OK", protocol.seq);
+                    printf("Server : packet no. %d -> OK\n\n", protocol.seq);
 
                     if (protocol.type.binary && protocol.flags.name) {
                         Stream* str;
@@ -129,30 +125,16 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                         if (protocol.flags.quit) {
                             str->initializeMissing(protocol.seq);
 
-                            if (!checkCompletition(namevec, protocol.stream)) {
-                                /*
-                                std::vector<char> missing = requestPackets(*str);
-                                header reference;
-                                ZeroMemory(&reference, sizeof(reference));
-
-                                reference.flags.retry = reference.type.control = reference.type.binary = 1;
-                                for (auto member : missing)
-                                {
-                                    reply(host, host, arq(reference, reference.seq));
-                                }
-
-                                std::this_thread::sleep_for(std::chrono::microseconds(50));
-                                */
+                            if (checkCompletition(namevec, protocol.stream)) {
+                                str->finished = 1;
                             }
-
-
                         }
                     }
                     else if (protocol.type.keep_alive)
                         continue;
                 }
                 else {
-                    printf("\n\nServer : packet no. %d -> BAD", protocol.seq);
+                    printf("Server : packet no. %d ------> BAD\n\n", protocol.seq);
                     continue;
                 }
                 if (protocol.flags.name || !(protocol.type.text || protocol.type.binary))
@@ -161,7 +143,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
             else
             {
                 if (reply(host, host, buffer))
-                    printf("\n\nServer : packet no. %d -> OK", protocol.seq);
+                    printf("Server : packet no. %d -> OK\n\n", protocol.seq);
                 else
                     continue;
 
@@ -179,8 +161,6 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                 lastStream = protocol.stream;
             }
 
-            
-          
             if (protocol.flags.quit || (recent && recent->finished)) {
                 //** prijmeme posledny paket komunikacie **//
 
@@ -192,7 +172,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     std::cout << "transfer done" << std::endl;
                 if (protocol.type.binary) {
                     fileName = new char[filenameSize + 1];
-                               
+                    ZeroMemory(fileName, filenameSize + 1);
                     concat(namevec, protocol.stream, fileName);
                     fileName[filenameSize] = '\0';
                                
@@ -201,6 +181,8 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
                     std::cout << "saving" << std::endl;
                     //vytvorenie suboru
+
+                    saveFileTo(fileName);
                     std::ofstream file(fileName, std::ios::out | std::ios::binary | std::ios::app);
                     file.write(filebuffer, size);
                     file.close();
@@ -215,7 +197,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     concat(streams, protocol.stream, buffer);
                     std::cout << buffer << std::endl;
                 }
-
+                
                 }
                 else {      
                   
@@ -243,9 +225,9 @@ void Reciever::wakeUp()
 
     {
 
-        printf("The Winsock dll found!\n");
+        printf("DEBUG : The Winsock dll found!\n");
 
-        printf("The current status is: %s.\n", wsaData.szSystemStatus);
+        printf("DEBUG : The current status is: %s.\n", wsaData.szSystemStatus);
 
     }
 
@@ -255,17 +237,13 @@ void Reciever::wakeUp()
 
     {
 
-        //Tell the user that we could not find a usable WinSock DLL
-
-        printf("The dll do not support the Winsock version %u.%u!\n",
+        printf("DEBUG : The dll do not support the Winsock version %u.%u!\n",
 
             LOBYTE(wsaData.wVersion), HIBYTE(wsaData.wVersion));
 
-        // When your application is finished call WSACleanup
 
         WSACleanup();
 
-        // and exit
 
         return;
 
@@ -275,26 +253,15 @@ void Reciever::wakeUp()
 
     {
 
-        printf("The dll supports the Winsock version %u.%u!\n", LOBYTE(wsaData.wVersion),
+        printf("DEBUG : The dll supports the Winsock version %u.%u!\n", LOBYTE(wsaData.wVersion),
 
             HIBYTE(wsaData.wVersion));
 
-        printf("The highest version this dll can support: %u.%u\n", LOBYTE(wsaData.wHighVersion),
+        printf("DEBUG : The highest version this dll can support: %u.%u\n", LOBYTE(wsaData.wHighVersion),
 
             HIBYTE(wsaData.wHighVersion));
-
-
-
-        // Setup Winsock communication code here
-
-
-
-        // When your application is finished call WSACleanup
-
-        
-
+        printf("==========================================================================\n\n\n");
         return;
-
     }
 }
 
@@ -333,13 +300,17 @@ void Reciever::run() {
         closesocket(listenSocket);
         recieving.join();
 
-    if (listenSocket == INVALID_SOCKET) {
-        printf("Error : at socket(): %ld\n", WSAGetLastError());
-
-        WSACleanup();
         return;
+
+
+
+}
+
+void Reciever::cleanup() {
+
+    if (WSACleanup() == SOCKET_ERROR)
+    {
+        std::cout << "Error : WSACleanup failed " + WSAGetLastError();
     }
-
-
 
 }
