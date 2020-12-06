@@ -179,7 +179,7 @@ static void             init_crc16_tab(void);
 
 static bool             crc_tab16_init = false;
 static uint16_t         crc_tab16[256];
-
+ 
 /*
  * uint16_t crc_16( const unsigned char *input_str, size_t num_bytes );
  *
