@@ -6,6 +6,9 @@
 
 typedef unsigned char u_int8_t;
 
+/// <summary>
+///		Struktura predstavujuca pole FLAGS v hlavicke protokolu
+/// </summary>
 typedef struct {
 	u_int8_t resesend : 1;
 	u_int8_t reserved : 1;
@@ -19,7 +22,9 @@ typedef struct {
 }FLAGS;
 
 
-
+/// <summary>
+///		Struktura predstavujuca pole TYPE v hlavicke protokolu
+/// </summary>
 typedef struct {
 	u_int8_t control : 1;
 	u_int8_t text : 1;
@@ -31,6 +36,9 @@ typedef struct {
 
 }TYPE;
 
+/// <summary>
+///  Štruktura predstavujuca protokol nad UDP
+/// </summary>
 struct header {
 	FLAGS flags;
 	TYPE type;
@@ -40,6 +48,9 @@ struct header {
 	int seq;
 };
 
+/// <summary>
+///		Trieda predstavujuca protokol nad UDP
+/// </summary>
 class Protocol
 {
 	public:

@@ -2,6 +2,9 @@
 #include<WinSock2.h>
 #include<iostream>
 
+/// <summary>
+///		Trieda obsahuje informácie o aktualnej instancii prijimaca
+/// </summary>
 class Reciever
 {
 public:

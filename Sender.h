@@ -16,7 +16,9 @@
 #define CLIENT_INIT(address, port ) \
   Sender( address, port)
 
-
+/// <summary>
+///		Trieda obsahuje informacie o aktualnej instancii odosielatela
+/// </summary>
 class Sender
 {
 
@@ -27,7 +29,7 @@ class Sender
 			port = _port;
 			alive = true;
 			
-			fragment = 1000;
+			fragment = 1300;
 			hostsockaddr.sin_family = AF_INET; 
 			hostsockaddr.sin_port = htons(_port);
 			hostsockaddr.sin_addr.s_addr = addr;

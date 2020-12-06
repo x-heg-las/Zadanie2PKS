@@ -11,7 +11,15 @@
 #include <sys/stat.h>
 #include <locale>
 #include <codecvt>
+#include<ios>
+#include<limits> 
 
+/// <summary>
+///  Funkcia pre spojenie fragmentov do jedneho bloku
+/// </summary>
+/// <returns>
+///     Velkost dat
+/// </returns>
 int concat(std::vector<Stream> &streams, int id, char *buffer)
 {
     int offset = 0;
@@ -34,6 +42,12 @@ int concat(std::vector<Stream> &streams, int id, char *buffer)
     return offset;
 }
 
+/// <summary>
+///     Nastavi hodnoty hlavicky podla argumentov
+/// </summary>
+/// <returns>
+///     Retazec predstavujuci hlavicku
+/// </returns>
 char* arq(header& protocol, int len)
 {
     protocol.seq = len;
@@ -54,19 +68,29 @@ char* arq(header& protocol, int len)
     return msg;
 }
 
-
+/// <summary>
+///     Funkcia pre vyber modu
+/// </summary>
 int chooseService()
 {
     char choice;
     std::cout << "Vyber mod, v ktorom chcete pracovat (reciever/sender)[r/s] ";
     std::cin >> choice;
+    std::cin.clear();
+    std::cin.ignore();
 
-    if (choice == SENDER || choice == RECIEVER)
+    if (choice == SENDER || choice == RECIEVER || choice == 'u')
         return choice;
 
     return BAD_INPUT;
 }
 
+/// <summary>
+///     Zabezpecuje nacitanie cesty k pozadovanemu suboru
+/// </summary>
+/// <returns>
+///     Cesta k suboru
+/// </returns>
 std::string getFilename()
 {
     char filename[MAX_PATH];
@@ -115,6 +139,12 @@ std::string getFilename()
     return "";
 }
 
+/// <summary>
+///     Zabezpecuje ziskanie cesty k adresaru, do ktoreho ma byt ulozeny subor
+/// </summary>
+/// <returns>
+///     Cesta k adresaru
+/// </returns>
 char* saveFileTo(char* filename, char* filepath)
 {
 
@@ -126,9 +156,6 @@ char* saveFileTo(char* filename, char* filepath)
     char* ptr = filters;
     sprintf(filters , "%s  ", post);
     sprintf(filters + strlen(post) +3, "*%s", post);
-
-    
-    
 
     ZeroMemory(&ofn, sizeof(ofn));
 
@@ -172,6 +199,9 @@ char* saveFileTo(char* filename, char* filepath)
     return nullptr;
 }
 
+/// <summary>
+///     Uvolnenie alokovanych fragmentov
+/// </summary>
 void freeData(std::vector<fragment>& data)
 {
 
@@ -180,6 +210,9 @@ void freeData(std::vector<fragment>& data)
     }
 }
 
+/// <summary>
+///     Zisti sekvencne cisla neobdrzanych fragmentov
+/// </summary>
 std::vector<char>  requestPackets(Stream& stream)
 {
     std::vector<char> missing;
@@ -191,6 +224,9 @@ std::vector<char>  requestPackets(Stream& stream)
     return missing;;
 }
 
+/// <summary>
+///     Analyzuje hlavicku protokolu nad UDP
+/// </summary>
 void analyzeHeader(header& protocol, char* buffer) {
 
     ZeroMemory(&protocol, sizeof(protocol));
@@ -206,7 +242,12 @@ void analyzeHeader(header& protocol, char* buffer) {
     return;
 }
 
-
+/// <summary>
+///     Nacita IP adresu
+/// </summary>
+/// <returns>
+///     Retazec s IP adresou
+/// </returns>
 std::string loadIP()
 {
 
@@ -218,18 +259,26 @@ std::string loadIP()
     return input;
 }
 
+/// <summary>
+///     Nacita cislo portu
+/// </summary>
+/// <returns>
+///     Cislo portu
+/// </returns>
+int loadPort() {
 
-unsigned short loadPort() {
-
-    unsigned short val;
-    std::cout << "Zadaj cislo portu [1024 - 65535]:" << std::endl;
+    int val = 0;
+    std::cout << "Zadaj cislo portu [1024 - 65535]: ";
 
     std::cin >> val;
-
+    std::cin.clear();
+    std::cin.ignore();
     return val;
 }
  
-
+/// <summary>
+///     Prevedie data hlavicky na retazec
+/// </summary>
 void copyHeader(char* data, Protocol header) {
 
     memcpy(data++,&header.flags,1);
@@ -256,6 +305,12 @@ void copyHeader(char* data, Protocol header) {
     return;
 }
 
+/// <summary>
+///     Vytvori pole fragmetov podla nacitanych dat
+/// </summary>
+/// <returns>
+///     Pocet fragmentov
+/// </returns>
 int fragmentMessage( std::vector<fragment> &vec, struct fragment message, int length, char* data, int fragmentLength, int type, unsigned short _stream) {
 
     fragment ptr;
@@ -311,6 +366,9 @@ int fragmentMessage( std::vector<fragment> &vec, struct fragment message, int le
 
 }
 
+/// <summary>
+///     Zisti ci boli prijate vsetky fragmenty
+/// </summary>
 bool checkCompletition(std::vector<Stream>& stream,  short streamid)
 {
     Stream* data = findStream(stream, streamid);
@@ -327,6 +385,9 @@ bool checkCompletition(std::vector<Stream>& stream,  short streamid)
     return true;
 }
 
+/// <summary>
+///     Najde pozadovany tok dat podla cisla toku v hlavicke
+/// </summary>
 Stream *findStream(std::vector<Stream>& streams, short id)
 {
     Stream* str;
@@ -347,6 +408,9 @@ Stream *findStream(std::vector<Stream>& streams, short id)
     return str;
 }
 
+/// <summary>
+///     Vypocita hodnotu CRC dat
+/// </summary>
 
 unsigned short crc(char* ptr, int length) {
 

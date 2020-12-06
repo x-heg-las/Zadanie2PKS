@@ -173,12 +173,19 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
     std::thread listening(&recieveMessage, socket, ACK, std::ref(unrecieved));
 
     for(struct fragment &msg : data) {
+        int seq;
 
-        unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
+        //ak posielame subor rozdeleny na viac fragmentov
+        if (msg.header.type.len == 3)
+            seq = msg.header.sequenceNumber;
+        else
+            seq = 0;
+
+        unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber; // obsahuje nepotvrdene fragmenty
 
         if (result = sendto(socket, msg.data, (msg.header.dataLength + msg.header.type.len * 4), 0, (struct sockaddr*)&host, sizeof(host)) == SOCKET_ERROR) {
 
-            std::cout << "Client : Failed to send data... connection closed" << std::endl;
+            std::cout << "Client : Failed to send data\n" << std::endl;
             ready.store(false);
 
             if (listening.joinable())
@@ -188,7 +195,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
             return -1;
         }
         else {
-            printf("Cient : sending packet... size:%d B (header %d B)\n\n", msg.header.dataLength + msg.header.type.len * 4, msg.header.type.len * 4);
+            printf("Cient : sending packet...seq :%d size:%d B (header %d B)\n\n",seq, msg.header.dataLength + msg.header.type.len * 4, msg.header.type.len * 4);
             frg_sent++;
         }
 
@@ -198,7 +205,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
             while (!unrecieved.empty()) {
 
                 if (resend == 2){
-                    printf("Client : No response .. connection closed");
+                    printf("Client : No response\n");
                     ready.store(false);
 
                     if (listening.joinable())
@@ -220,7 +227,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
 
                     if (result = sendto(socket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&host, sizeof(host)) == SOCKET_ERROR) {
 
-                        std::cout << "Client : Failed to send data... connection closed" << std::endl;
+                        std::cout << "Client : Failed to send data" << std::endl;
                         ready.store(false);
 
                         if (listening.joinable())
@@ -230,7 +237,14 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
                         return -1;
                     }
                     else {
-                        printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                        int seq;
+
+                        if (data.at(it->first).header.type.len == 3)
+                            seq = (data.at(it->first).header.sequenceNumber);
+                        else
+                            seq = 0;
+
+                        printf("Cient : resending packet...seq: %d size:%d B (header %d B)\n\n", seq, data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
                         frg_sent++;
                     }
 
@@ -245,12 +259,12 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
         std::this_thread::sleep_for(std::chrono::milliseconds(7));
     }
 
-  
+    //skontrouje ci boli potvrdene vsetky fragmenty
     int resend = 0;
     while (!unrecieved.empty()) {
         
         if (resend == 2) {
-            printf("Client : No response .. connection closed");
+            printf("Client : No response\n");
             ready.store(false);
 
             if (listening.joinable())
@@ -271,7 +285,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
 
             if (result = sendto(socket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&host, sizeof(host)) == SOCKET_ERROR) {
 
-                std::cout << "Client : Failed to send data... connection closed" << std::endl;
+                std::cout << "Client : Failed to send data" << std::endl;
         
                 ready.store(false);
 
@@ -282,7 +296,14 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
                 return -1;
             }
             else {
-                printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                int seq;
+
+                if (data.at(it->first).header.type.len == 3)
+                    seq = (data.at(it->first).header.sequenceNumber);
+                else
+                    seq = 0;
+
+                printf("Cient : resending packet...seq: %d size:%d B (header %d B)\n\n",seq, data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
                 frg_sent++;
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(7));
@@ -339,6 +360,12 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
     int frg_sent = 0;
 
     for(struct fragment &msg : data){
+        int seq;
+
+        if (msg.header.type.len == 3)
+            seq = msg.header.sequenceNumber;
+        else
+            seq = 0;
         unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
 
         //Poskodenie dat datagramu
@@ -363,7 +390,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
 
         }
         else {
-            printf("Cient : sending packet... size:%d B (header %d B)\n\n", msg.header.dataLength + msg.header.type.len * 4, msg.header.type.len * 4);
+            printf("Cient : sending packet... seq: %d size:%d B (header %d B)\n\n",seq, msg.header.dataLength + msg.header.type.len * 4, msg.header.type.len * 4);
             frg_sent++;
         }
        
@@ -381,7 +408,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
             while (!unrecieved.empty()) {
 
                 if (resend == 2) {
-                    printf("Client : No response .. connection closed");
+                    printf("Client : No response\n ");
                     ready.store(false);
 
                     if (listening.joinable())
@@ -403,7 +430,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
 
                     if (result = sendto(connectionSocket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
 
-                        std::cout << "Client : Failed to send data... connection closed" << std::endl;
+                        std::cout << "Client : Failed to send data" << std::endl;
                         ready.store(false);
 
                         if (listening.joinable())
@@ -413,7 +440,14 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
                         return -1;
                     }
                     else {
-                        printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                        int seq;
+
+                        if (data.at(it->first).header.type.len == 3)
+                            seq = (data.at(it->first).header.sequenceNumber);
+                        else
+                            seq = 0;
+
+                        printf("Cient : resending packet...seq: %d size:%d B (header %d B)\n\n", seq, data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
                         frg_sent++;
                     }
 
@@ -426,12 +460,12 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
             }
         }
     }
-  
+    //skontrouje ci boli potvrdene vsetky fragmenty
     int resend = 0; 
     while (!unrecieved.empty()) {
 
         if (resend == 2) {
-            printf("Client : No response .. connection closed");
+            printf("Client : No response\n");
 
             ready.store(false);
             if (listening.joinable())
@@ -467,7 +501,14 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
                 return -1;
             }
             else {
-                printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                int seq;
+
+                if (data.at(it->first).header.type.len == 3)
+                    seq = (data.at(it->first).header.sequenceNumber);
+                else
+                    seq = 0;
+
+                printf("Cient : resending packet...seq: %d size:%d B (header %d B)\n\n", seq, data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
                 frg_sent++;
             }
         }
@@ -515,7 +556,12 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
 
     for (struct fragment& msg : data) {
         
-        
+        int seq;
+
+        if (msg.header.type.len == 3)
+            seq = msg.header.sequenceNumber;
+        else
+            seq = 0;
        
         unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
 
@@ -540,7 +586,7 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
 
         }
         else {
-            printf("Cient : sending packet... size:%d B (header %d B)\n\n", msg.header.dataLength + msg.header.type.len * 4, msg.header.type.len * 4);
+            printf("Cient : sending packet... seq: %d size:%d B (header %d B)\n\n",seq, msg.header.dataLength + msg.header.type.len * 4, msg.header.type.len * 4);
             frg_sent++;
         }
 
@@ -558,7 +604,7 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
             while (!unrecieved.empty()) {
 
                 if (resend == 2) {
-                    printf("Client : No response .. connection closed");
+                    printf("Client : No response\n");
                     ready.store(false);
                     if (listening.joinable()) {
                         listening.join();
@@ -580,7 +626,7 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
 
                     if (result = sendto(connectionSocket, data.at(it->first).data, (data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4), 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
 
-                        std::cout << "Client : Failed to send data... connection closed" << std::endl;
+                        std::cout << "Client : Failed to send data" << std::endl;
                         ready.store(false);
                         if (listening.joinable()) {
                             listening.join();
@@ -590,7 +636,14 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
                         return -1;
                     }
                     else {
-                        printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                        int seq;
+
+                        if (data.at(it->first).header.type.len == 3)
+                            seq = (data.at(it->first).header.sequenceNumber);
+                        else
+                            seq = 0;
+
+                        printf("Cient : resending packet...seq: %d size:%d B (header %d B)\n\n", seq, data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
                         frg_sent++;
                     }
 
@@ -603,12 +656,12 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
             }
         }
     }
-
+    //skontrouje ci boli potvrdene vsetky fragmenty
     int resend = 0;
     while (!unrecieved.empty()) {
 
         if (resend == 2) {
-            printf("Client : No response .. connection closed");
+            printf("Client : No response\n");
             ready.store(false);
             if (listening.joinable()) {
                 listening.join();
@@ -642,7 +695,14 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
                 return -1;
             }
             else {
-                printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
+                int seq;
+
+                if (data.at(it->first).header.type.len == 3)
+                    seq = (data.at(it->first).header.sequenceNumber);
+                else
+                    seq = 0;
+
+                printf("Cient : resending packet...seq: %d size:%d B (header %d B)\n\n", seq, data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
                 frg_sent++;
             }
         }
@@ -715,6 +775,9 @@ void Sender::wakeUp()
     
 }
 
+/// <summary>
+///     Spustenie vysielaca
+/// </summary>
 void Sender::run()
 {
     int _resullt = 0;
@@ -755,7 +818,7 @@ void Sender::run()
      while (true) {
         char choice;
         streamnum = rand() % USHRT_MAX;
-        std::cout << "help : [t] (text message) [f] (file) [s] (shutdown) [l] (nastav velkost fragmentu) [e] (vnesenie  chyby)" << std::endl;
+        std::cout << "\nhelp : [t] (text message) [f] (file) [s] (shutdown) [l] (nastav velkost fragmentu) [e] (vnesenie  chyby)" << std::endl;
         std::cin >> choice;
         std::string msg, filename;
        
@@ -813,15 +876,18 @@ void Sender::run()
                 break;
             case 'l':
                 frag = 0;
-                for (int i = BAD_INPUT; frag < 13 || frag > MAX_FRAG; std::cin >> frag) {
+                for (int i = BAD_INPUT; frag < 13 || frag > MAX_FRAG; std::cin >> frag, std::cin.clear(), std::cin.ignore()) {
                     printf("\nZadam maximalnu velkost fragmentu [13 - 1456] (z toho 12 B pre hlavicku) : ");
                 }
                 fragment = frag;
                 break;
             case 'e':
+
                 printf("Zadaj cislo k ( kazdy k-ty fragment posielaneho suboru bude poskodeny): ");
                 std::cin >> err;
-                if (err)
+                std::cin.clear();
+                std::cin.ignore();
+                if (err > 0)
                     errPkt = err;
                 else
                     errPkt = 0;
@@ -835,7 +901,7 @@ void Sender::run()
                 }
 
                 closesocket(connectionSocket);
-                std::cout << "Client : client is shutting downn\nReturning to main screen..." << std::endl;
+                std::cout << "Client : client is shutting downn\n" << std::endl;
                 return;
 
         }

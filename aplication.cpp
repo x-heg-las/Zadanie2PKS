@@ -9,11 +9,12 @@
 #include "Reciever.h"
 
 
-#pragma comment(lib, "Ws2_32.lib") // alebo zmenit v konfiguraciach
+#pragma comment(lib, "Ws2_32.lib") 
 
+//Spustenie aplikacie
 int main(int argc, char **argv) {
 
-	unsigned short port = 0;
+	int port = 0;
 	char val;
 	bool running = true;
 
@@ -38,10 +39,10 @@ int main(int argc, char **argv) {
 
 			unsigned long WSAAPI IP_addr;
 
-			for (IP_addr = INADDR_NONE; IP_addr == INADDR_NONE; IP_addr = inet_addr(loadIP().c_str()));  //TODO : skontroluj riadne to nacitavanie
+			for (IP_addr = INADDR_NONE; IP_addr == INADDR_NONE; IP_addr = inet_addr(loadIP().c_str()));  
 			for (port = 0; port < 1024 || port > 65535; port = loadPort());
 
-			Sender client = Sender(IP_addr, port);
+			Sender client = Sender(IP_addr, (unsigned short)port);
 
 			client.wakeUp();
 			client.run();

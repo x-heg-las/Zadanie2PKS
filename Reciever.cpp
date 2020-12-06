@@ -38,7 +38,7 @@ bool reply(sockaddr_in host, sockaddr_in server, char* data) {
     else
         seq = -1;
 
-
+    //prijal keepalive spravu
     if (protocol.type.keep_alive) {
         protocol.flags.ack = 1;
         sendto(client, arq(protocol, -1), HEADER_8, 0, (sockaddr*)&host, sizeof(host));
@@ -49,7 +49,7 @@ bool reply(sockaddr_in host, sockaddr_in server, char* data) {
     protocol.type.len = size;
 
 
-
+    //crc sedí
     if (sum == packetChecksum) {
         protocol.flags.ack = 1;
         sendto(client, arq(protocol, seq), HEADER_12, 0, (sockaddr*)&host, sizeof(host));
@@ -82,7 +82,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
     slen = sizeof(host);
     header protocol, reference;
     message transfered;
-    stream* dataFlow;
+  
     Stream* recent = nullptr;
        
     char* fileName = nullptr;
@@ -92,7 +92,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
     std::vector<Stream> namevec;
     std::vector<Stream> streams; 
  
-    ZeroMemory(&dataFlow, sizeof(dataFlow));
+    //  cyklus prijíma správy dokial použivate¾ neukonèí spojenie
     while (true) {
         
         if ((recvfrom(listenSocket, (char*)buffer, MAX_FRAG, 0, (struct sockaddr*)&host, &slen)) == SOCKET_ERROR) {
@@ -113,7 +113,8 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     reference = protocol;
                     Stream incoming = Stream(reference.stream, protocol.stream);
                     Stream* str;
-
+                        
+                        //definuje ci ide o tok s datami suboru alebo s nazvami suboru
                         if (protocol.flags.name && !protocol.flags.resesend) {
                             namevec.clear();
                             namevec.push_back(incoming);
@@ -130,6 +131,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     protocol.type.len = 2;
                 }
 
+                //odpoveda na prijaty fragment
                 if (reply(host, host, buffer)) {
 
                     printf("Server : packet no. %d -> OK (%d B)\n\n", protocol.seq, protocol.data_len + protocol.type.len*4);
@@ -139,17 +141,17 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
                         str = findStream(namevec, protocol.stream);
 
-
+                        //vytvorime fragment
                         Message mesg = Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq);
-
+                        //vlozime ho do pola
                         str->addFragment(mesg);
 
-                        
+                        //dlzka nazvu suboru
                         filenameSize += protocol.data_len;
 
                         if (protocol.flags.quit) {
                             str->initializeMissing(protocol.seq);
-
+                            //ak bol prijaty posledny fragment suboru, tak skontroluje ci prijal vsetky fragmenty s mensim sekvencnym cislom ako posledny fragment
                             if (checkCompletition(namevec, protocol.stream)) {
                                 str->finished = 1;
                             }
@@ -159,6 +161,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                         continue;
                 }
                 else {
+                    //bol prijaty fragment s chybou
                     printf("Server : packet no. %d ------> BAD (%d B)\n\n", protocol.seq, protocol.data_len + protocol.type.len * 4);
                     continue;
                 }
@@ -166,7 +169,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     continue;
             }
             else
-            {
+            {   //odpoveda na fragmenty, ktore nemali control bit rovny 1
                 if (reply(host, host, buffer))
                     printf("Server : packet no. %d -> OK (%d B)\n\n", protocol.seq, protocol.data_len + protocol.type.len * 4);
                 else {
@@ -187,7 +190,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
             }
 
 
-            
+            //ak sa jedna rovnaky tok dat ako predosly fragment tak preskocime vyhladavanie toku
             if (protocol.stream == lastStream)
             {
                 recent->addFragment(mesg);
@@ -234,7 +237,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     delete[] fileName;
                                 
                 }
-
+                //ak sme prijali textovu spravu
                 if (protocol.type.text) {
                     ZeroMemory(buffer, 512);
                     concat(streams, protocol.stream, buffer);
@@ -305,11 +308,15 @@ void Reciever::wakeUp()
 
             HIBYTE(wsaData.wHighVersion));
         printf("==========================================================================\n");
-        printf("==================================SERVER==================================\n\n");
+        printf("==================================SERVER==================================\n");
+        printf("Stlac [0] pre vypnutie , [h] help\n\n");
         return;
     }
 }
 
+/// <summary>
+///     Spustenie prijimaca
+/// </summary>
 void Reciever::run() {
 
     SOCKET listenSocket = INVALID_SOCKET;
@@ -322,11 +329,13 @@ void Reciever::run() {
     listenSocket = socket(socketi.sin_family, SOCK_DGRAM, IPPROTO_UDP);
     if (listenSocket == INVALID_SOCKET) {
         std::cout << "ERROR : Bad socket init." << std::endl;
+        return;
     }
     
     int iResult = bind(listenSocket, (struct sockaddr*)&socketi, sizeof(socketi));
     if (iResult == SOCKET_ERROR) {
         std::cout << "ERROR : bind error !!" << std::endl;
+        return;
     }
     
     std::cout << "Server : Waiting for transfer..." << std::endl;
@@ -344,7 +353,9 @@ void Reciever::run() {
             case 'h':
                 printf("Stlac [0] pre vypnutie , [h] help");
                 break;
-       }
+            default:
+                continue;
+        }
     }
     
     if (recieving.joinable())

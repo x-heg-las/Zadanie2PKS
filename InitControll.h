@@ -16,7 +16,10 @@
 #define NAME 3
 
 
-
+/// <summary>
+///		Struktura predstavujuca jeden fragment posielanych dat
+///		Drzi informacie o hlavicke a konkretne data
+/// </summary>
 struct fragment {
 
 	Protocol header;
@@ -24,7 +27,10 @@ struct fragment {
 
 };
 
-
+/// <summary>
+///		Struktura predstavujuca jeden fragment posielanych dat
+///		Drzi informacie o hlavicke a konkretne data
+/// </summary>
 struct message {
 	
 	char* data;
@@ -34,12 +40,10 @@ struct message {
 	//message* next;
 };
 
-struct stream {
-	//message* data;
-	short streamNumber;
-	char finished;
-};
 
+/// <summary>
+///		Trieda spravujúca zaznamy tj. fragmenty
+/// </summary>
 class Message {
 
 public:
@@ -101,7 +105,9 @@ public:
 
 };
 
-
+/// <summary>
+///		Trieda spravujúca jednotlive toky dat jedneho suboru
+/// </summary>
 class Stream {
 
 public:
@@ -162,7 +168,7 @@ char* arq(header &protocol, int len);
 int chooseService();
 std::string getFilename();
 char* saveFileTo(char* filename, char* filepath);
-unsigned short loadPort();
+int loadPort();
 std::string loadIP();
 Stream *findStream(std::vector<Stream> &streams, short id);
 int fragmentMessage(std::vector<fragment> & fragments,struct fragment message, int length, char* data, int fragmentLength, int type, unsigned short streamnum);
