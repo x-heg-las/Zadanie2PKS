@@ -44,9 +44,9 @@ class Sender
 		unsigned short fragment;
 		static constexpr int maxFragment = 1000;
 		unsigned long ip;
-		static int sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int type);
-		static int sendFile(std::string fileName, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket, int errPacket);
-		static int connect(std::string fileName, int fragmentLength, sockaddr_in host, SOCKET socket);
+		static int sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int type, unsigned short streamnum);
+		static int sendFile(std::string fileName, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket, int errPacket, unsigned short streamnum);
+		static int connect(std::string fileName, int fragmentLength, sockaddr_in host, SOCKET socket, unsigned short streamnum);
 		void wakeUp();
 		void run();
 		void cleanup();

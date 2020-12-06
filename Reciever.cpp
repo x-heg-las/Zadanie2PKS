@@ -112,12 +112,22 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                     ptr = &transfered;
                     reference = protocol;
                     Stream incoming = Stream(reference.stream, 0);
+                    Stream* str;
 
-                    if (protocol.flags.name && !protocol.flags.resesend)
-                        namevec.push_back(incoming);
-                    else if(!protocol.flags.resesend)
-                        streams.push_back(incoming);
+                        if (protocol.flags.name && !protocol.flags.resesend) {
+                            namevec.clear();
+                            namevec.push_back(incoming);
+                            
+                        }
+                        else if (!protocol.flags.resesend) {
+                            streams.clear();
+                            streams.push_back(incoming);
+                        }
 
+                }
+                if (protocol.type.keep_alive) {
+                    protocol.seq = 0;
+                    protocol.type.len = 2;
                 }
 
                 if (reply(host, host, buffer)) {
@@ -128,6 +138,8 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                         Stream* str;
 
                         str = findStream(namevec, protocol.stream);
+
+
                         Message mesg = Message(buffer + protocol.type.len * 4, protocol.data_len, protocol.seq);
 
                         str->addFragment(mesg);
@@ -180,7 +192,6 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
             if (protocol.flags.quit || (recent && recent->finished)) {
                 //** prijmeme posledny paket komunikacie **//
 
-                //////// toto oprav na zrozumitelnejsie ////////
                 recent->initializeMissing(protocol.seq);
                 
                 if (checkCompletition(streams, protocol.stream)) {
@@ -200,13 +211,15 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
                     saveFileTo(fileName, filepath);
 
-                    std::cout << "saving" << std::endl;
-                    std::ofstream file(filepath, std::ios::out | std::ios::binary | std::ios::app);
+                    printf("Saved to : %s", filepath);
+                    std::ofstream file(filepath, std::ios::out | std::ios::binary );
                     
                     if(file){
                         file.write(filebuffer, size);
                         file.close();
                     }
+                    else
+                        printf("ERROR : couldnt save file");
 
                     delete[] fileName;
                                 

@@ -107,7 +107,7 @@ void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
     ready.store(true);
     int result = SOCKET_ERROR;
 
-    int iOptVal = 1000; // timeut na prijatie spravy 500 ms
+    int iOptVal = 1000; // timeut na prijatie spravy 1000 ms
     int iOptLen = sizeof(int);
 
     //upravenie timeoutu pre prijatie sprav od servera
@@ -146,7 +146,7 @@ void recieveMessage(SOCKET listenSocket, int type, std::map<int, int> &seq){
 /// <returns>
 ///     Pocet odoslanych fragmentov. Ak sa nepodarilo nadviazat spojenie vrati -1.
 /// </returns>
-int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, SOCKET socket) {
+int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, SOCKET socket, unsigned short streamnum) {
 
     struct fragment stream;
      
@@ -168,7 +168,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
     std::vector<struct fragment> data;
     std::map<int, int> unrecieved;
 
-    fragmentMessage(data, stream, fileName.length(), fileBuffer, fragmentLength, NAME);
+    fragmentMessage(data, stream, fileName.length(), fileBuffer, fragmentLength, NAME,streamnum);
 
     std::thread listening(&recieveMessage, socket, ACK, std::ref(unrecieved));
 
@@ -234,7 +234,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
                         frg_sent++;
                     }
 
-                    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(7));
                 }
                 free_to_send_mtx.unlock();
 
@@ -242,7 +242,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
                 std::this_thread::sleep_for(std::chrono::milliseconds(250));
             }
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(3));
+        std::this_thread::sleep_for(std::chrono::milliseconds(7));
     }
 
   
@@ -285,7 +285,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
                 printf("Cient : sending packet... size:%d B (header %d B)\n\n", data.at(it->first).header.dataLength + data.at(it->first).header.type.len * 4, data.at(it->first).header.type.len * 4);
                 frg_sent++;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(3));
+            std::this_thread::sleep_for(std::chrono::milliseconds(7));
         }
         free_to_send_mtx.unlock();
         //pocka na potvrdzovacie spravy
@@ -299,7 +299,7 @@ int Sender::connect(std::string filePath, int fragmentLength, sockaddr_in host, 
     return frg_sent;
 } 
 
-int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket, int errPacket)
+int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsockaddr, SOCKET connectionSocket, int errPacket, unsigned short streamnum)
 {
 
     std::ifstream fileInput(filePath, std::ifstream::in | std::ifstream::binary);
@@ -330,7 +330,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
     fileInput.read(fileBuffer , static_cast<std::streamsize>(fileSize));
     std::vector<struct fragment> data;
 
-    int fragmentCount = fragmentMessage(data, stream, fileSize, fileBuffer, fragmentLen, FILE);
+    int fragmentCount = fragmentMessage(data, stream, fileSize, fileBuffer, fragmentLen, FILE, streamnum);
     std::map<int, int> unrecieved;
 
     std::thread listening(&recieveMessage, connectionSocket, ACK,std::ref(unrecieved));
@@ -373,7 +373,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
         }
 
         //std::this_thread::sleep_for(std::chrono::microseconds(250));
-        std::this_thread::sleep_for(std::chrono::milliseconds(3));
+        std::this_thread::sleep_for(std::chrono::milliseconds(7));
        
         if (!(frg_sent % WINDOW)) {// ak sme poslali zadany pocet fragmetov
             int resend = 0;
@@ -417,7 +417,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
                         frg_sent++;
                     }
 
-                    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(7));
                 }
                 free_to_send_mtx.unlock();
 
@@ -488,7 +488,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
     return frg_sent;
 }
 
-int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int errPacket) 
+int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in  hostsockaddr, SOCKET connectionSocket, int errPacket, unsigned short streamnum) 
 {
     int len = message.length();
     int result,frg_sent = 0;
@@ -510,7 +510,7 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
         stream.header.type.text = 1;
     }
     
-    fragmentMessage(data, stream, len + 1, (char*)message.c_str(), fragmentLen, TEXTM); // len+1 aby sa odoslal aj '\0' znak
+    fragmentMessage(data, stream, len + 1, (char*)message.c_str(), fragmentLen, TEXTM, streamnum); // len+1 aby sa odoslal aj '\0' znak
     std::thread listening(&recieveMessage, connectionSocket, ACK, std::ref(unrecieved));
 
     for (struct fragment& msg : data) {
@@ -550,7 +550,7 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
         }
 
         //std::this_thread::sleep_for(std::chrono::microseconds(250));
-        std::this_thread::sleep_for(std::chrono::milliseconds(3));
+        std::this_thread::sleep_for(std::chrono::milliseconds(7));
 
         if (!(frg_sent % WINDOW)) {// ak sme poslali zadany pocet fragmetov
             int resend = 0;
@@ -594,7 +594,7 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
                         frg_sent++;
                     }
 
-                    std::this_thread::sleep_for(std::chrono::milliseconds(3));
+                    std::this_thread::sleep_for(std::chrono::milliseconds(7));
                 }
                 free_to_send_mtx.unlock();
 
@@ -725,6 +725,7 @@ void Sender::run()
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = IPPROTO_UDP;
 
+    srand(time(NULL));
     SOCKET connectionSocket = INVALID_SOCKET;
     sockaddr_in host;
 
@@ -748,12 +749,12 @@ void Sender::run()
         WSACleanup();
         return;
     }
-    int errPkt = 0, err = 0;
+    int errPkt = 0, err = 0,streamnum;
     std::string data;
     std::thread keepAlive_t;
      while (true) {
         char choice;
-
+        streamnum = rand() % USHRT_MAX;
         std::cout << "help : [t] (text message) [f] (file) [s] (shutdown) [l] (nastav velkost fragmentu) [e] (vnesenie  chyby)" << std::endl;
         std::cin >> choice;
         std::string msg, filename;
@@ -775,8 +776,8 @@ void Sender::run()
             std::getline(std::cin, msg, '\n');
             data.append(msg);
 
-            if (msg.size() > 0)
-                _resullt = sendMessage(msg, fragment, hostsockaddr, connectionSocket, TEXTM);
+            if (data.size() > 0)
+                _resullt = sendMessage(data, fragment, hostsockaddr, connectionSocket, TEXTM, streamnum);
 
             if (_resullt > 0) {
                 keepAlive_t = std::thread(&keepAlive, hostsockaddr, connectionSocket);
@@ -798,10 +799,10 @@ void Sender::run()
 
                 
                 if (!filename.empty())
-                    _resullt = connect(filename, fragment, hostsockaddr, connectionSocket);
+                    _resullt = connect(filename, fragment, hostsockaddr, connectionSocket, streamnum);
 
                 if (_resullt > 0)
-                    _resullt += sendFile(filename, fragment, hostsockaddr, connectionSocket, errPkt);
+                    _resullt += sendFile(filename, fragment, hostsockaddr, connectionSocket, errPkt, streamnum);
 
                 if (_resullt > 0) {
                     keepAlive_t = std::thread(&keepAlive, hostsockaddr, connectionSocket);

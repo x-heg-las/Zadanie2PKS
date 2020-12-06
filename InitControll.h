@@ -165,6 +165,6 @@ char* saveFileTo(char* filename, char* filepath);
 unsigned short loadPort();
 std::string loadIP();
 Stream *findStream(std::vector<Stream> &streams, short id);
-int fragmentMessage(std::vector<fragment> & fragments,struct fragment message, int length, char* data, int fragmentLength, int type);
+int fragmentMessage(std::vector<fragment> & fragments,struct fragment message, int length, char* data, int fragmentLength, int type, unsigned short streamnum);
 bool checkCompletition(std::vector<Stream> &stream, short streamid);
 unsigned short crc(char* ptr, int length);

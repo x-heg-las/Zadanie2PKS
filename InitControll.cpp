@@ -200,7 +200,7 @@ void analyzeHeader(header& protocol, char* buffer) {
     if (protocol.type.len == 2)
         protocol.seq = 0;
     if (protocol.type.len < 2) {
-        protocol.data_len = 1;
+        protocol.data_len = 0;
     }
 
     return;
@@ -256,7 +256,7 @@ void copyHeader(char* data, Protocol header) {
     return;
 }
 
-int fragmentMessage( std::vector<fragment> &vec, struct fragment message, int length, char* data, int fragmentLength, int type) {
+int fragmentMessage( std::vector<fragment> &vec, struct fragment message, int length, char* data, int fragmentLength, int type, unsigned short _stream) {
 
     fragment ptr;
     Protocol reference = message.header;
@@ -294,7 +294,7 @@ int fragmentMessage( std::vector<fragment> &vec, struct fragment message, int le
             ptr.header.type.binary = 1;
         }
        
-
+        ptr.header.streamNumber = _stream;
         copyHeader(ptr.data, ptr.header);
         std::copy_n(data, size, ptr.data + (reference.type.len * 4));
 
@@ -334,7 +334,14 @@ Stream *findStream(std::vector<Stream>& streams, short id)
     std::find_if(streams.begin(),
         streams.end(),
         [&var = id, &se = str]
-    (Stream& s) -> bool { if (s.streamnumber == var) { se = &s; return true; }return false;  });
+    (Stream& s) -> bool { 
+            if (s.streamnumber == var) { 
+                se = &s; return true;
+            }
+            se = nullptr;  
+            return false;       
+        
+        });
 
 
     return str;
