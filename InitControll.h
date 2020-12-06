@@ -161,7 +161,7 @@ int concat(std::vector<Stream>& streams, int id, char* buffer);
 char* arq(header &protocol, int len);
 int chooseService();
 std::string getFilename();
-char* saveFileTo(char* filename);
+char* saveFileTo(char* filename, char* filepath);
 unsigned short loadPort();
 std::string loadIP();
 Stream *findStream(std::vector<Stream> &streams, short id);

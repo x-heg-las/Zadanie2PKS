@@ -16,6 +16,12 @@
 #define MAX_FILE 2500000
 #pragma comment(lib,"ws2_32.lib")
 
+/// <summary>
+/// Funkcia podla prijatych dat skontroluje CRC a vyhotovi opdoved ACK alebo RETRY ak boli data poskodene
+/// </summary>
+/// <returns>
+///     True ak data prisli neposkodene inak false
+/// </returns>
 bool reply(sockaddr_in host, sockaddr_in server, char* data) {
 
     header protocol;
@@ -57,6 +63,13 @@ bool reply(sockaddr_in host, sockaddr_in server, char* data) {
     }
 }
 
+/// <summary>
+/// 
+/// </summary>
+/// <param name="listenSocket">Socket, na ktory prijima spravy</param>
+/// <param name="socketi">
+///     Obsahuje IP adresu servera (127.0.0.1) a cislo portu, na kotrom prijima spravy 
+/// </param>
 void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
     char* buffer = new char [MAX_FRAG];
@@ -89,7 +102,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
         }
         else {
 
-            printf("\nReceived packet from %s:%d", inet_ntoa(host.sin_addr), ntohs(host.sin_port));
+            printf("\nReceived packet from %s:%d\n", inet_ntoa(host.sin_addr), ntohs(host.sin_port));
 
             analyzeHeader(protocol, buffer);
 
@@ -109,7 +122,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
                 if (reply(host, host, buffer)) {
 
-                    printf("Server : packet no. %d -> OK\n\n", protocol.seq);
+                    printf("Server : packet no. %d -> OK (%d B)\n\n", protocol.seq, protocol.data_len + protocol.type.len*4);
 
                     if (protocol.type.binary && protocol.flags.name) {
                         Stream* str;
@@ -119,7 +132,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
 
                         str->addFragment(mesg);
 
-                        //neviem ci to je potrebne 
+                        
                         filenameSize += protocol.data_len;
 
                         if (protocol.flags.quit) {
@@ -134,7 +147,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                         continue;
                 }
                 else {
-                    printf("Server : packet no. %d ------> BAD\n\n", protocol.seq);
+                    printf("Server : packet no. %d ------> BAD (%d B)\n\n", protocol.seq, protocol.data_len + protocol.type.len * 4);
                     continue;
                 }
                 if (protocol.flags.name || !(protocol.type.text || protocol.type.binary))
@@ -143,9 +156,12 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
             else
             {
                 if (reply(host, host, buffer))
-                    printf("Server : packet no. %d -> OK\n\n", protocol.seq);
-                else
+                    printf("Server : packet no. %d -> OK (%d B)\n\n", protocol.seq, protocol.data_len + protocol.type.len * 4);
+                else {
+                    printf("Server : packet no. %d ------> BAD (%d B)\n\n", protocol.seq, protocol.data_len + protocol.type.len * 4);
                     continue;
+                }
+                    
 
             }
 
@@ -171,22 +187,26 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                 
                     std::cout << "transfer done" << std::endl;
                 if (protocol.type.binary) {
-                    fileName = new char[filenameSize + 1];
-                    ZeroMemory(fileName, filenameSize + 1);
+                    fileName = new char[MAX_PATH];
+                    ZeroMemory(fileName, MAX_PATH);
+                    
                     concat(namevec, protocol.stream, fileName);
                     fileName[filenameSize] = '\0';
-                               
-                    int size = concat(streams, protocol.stream, filebuffer);
-                                
+                    char filepath[MAX_PATH] = { 0 };
 
-                    std::cout << "saving" << std::endl;
+                    int size = concat(streams, protocol.stream, filebuffer);
+                    
                     //vytvorenie suboru
 
-                    saveFileTo(fileName);
-                    std::ofstream file(fileName, std::ios::out | std::ios::binary | std::ios::app);
-                    file.write(filebuffer, size);
-                    file.close();
+                    saveFileTo(fileName, filepath);
 
+                    std::cout << "saving" << std::endl;
+                    std::ofstream file(filepath, std::ios::out | std::ios::binary | std::ios::app);
+                    
+                    if(file){
+                        file.write(filebuffer, size);
+                        file.close();
+                    }
 
                     delete[] fileName;
                                 
@@ -195,6 +215,7 @@ void recieve(SOCKET listenSocket, struct sockaddr_in socketi) {
                 if (protocol.type.text) {
                     ZeroMemory(buffer, 512);
                     concat(streams, protocol.stream, buffer);
+                    std::cout << "Incomming message :";
                     std::cout << buffer << std::endl;
                 }
                 
@@ -260,7 +281,8 @@ void Reciever::wakeUp()
         printf("DEBUG : The highest version this dll can support: %u.%u\n", LOBYTE(wsaData.wHighVersion),
 
             HIBYTE(wsaData.wHighVersion));
-        printf("==========================================================================\n\n\n");
+        printf("==========================================================================\n");
+        printf("==================================SERVER==================================\n\n");
         return;
     }
 }
@@ -290,10 +312,16 @@ void Reciever::run() {
     
     while (alive) {
         int input;
-        std::cin >> input;
+        input = getchar();
 
-        if (input == 0)
-            alive = false;
+        switch (input) {
+            case '0':
+                alive = false;
+                break;
+            case 'h':
+                printf("Stlac [0] pre vypnutie , [h] help");
+                break;
+       }
     }
     
     if (recieving.joinable())
@@ -301,9 +329,6 @@ void Reciever::run() {
         recieving.join();
 
         return;
-
-
-
 }
 
 void Reciever::cleanup() {

@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include "InitControll.h"
 #include "Protocol.h"
 #include "crc.h"
@@ -7,6 +8,9 @@
 #include <windows.h>
 #include <fstream>
 #include <string.h>
+#include <sys/stat.h>
+#include <locale>
+#include <codecvt>
 
 int concat(std::vector<Stream> &streams, int id, char *buffer)
 {
@@ -30,21 +34,21 @@ int concat(std::vector<Stream> &streams, int id, char *buffer)
     return offset;
 }
 
-char* arq(header &protocol, int len)
+char* arq(header& protocol, int len)
 {
     protocol.seq = len;
     protocol.type.len = protocol.type.len;
-    protocol.data_len = 0;     
+    protocol.data_len = 0;
     protocol.type.control = 1;
 
-    if (protocol.flags.retry) 
+    if (protocol.flags.retry)
         protocol.flags.retry = 1;
-    else 
+    else
         protocol.flags.ack = 1;
 
 
-    char *msg = new char[HEADER_12];
-    
+    char* msg = new char[HEADER_12];
+
     memcpy(msg, &protocol, HEADER_12);
 
     return msg;
@@ -56,7 +60,7 @@ int chooseService()
     char choice;
     std::cout << "Vyber mod, v ktorom chcete pracovat (reciever/sender)[r/s] ";
     std::cin >> choice;
-    
+
     if (choice == SENDER || choice == RECIEVER)
         return choice;
 
@@ -64,56 +68,108 @@ int chooseService()
 }
 
 std::string getFilename()
-{       
-        char filename[MAX_PATH];
+{
+    char filename[MAX_PATH];
 
-        OPENFILENAME ofn;
-        ZeroMemory(&filename, sizeof(filename));
-        ZeroMemory(&ofn, sizeof(ofn));
-        ofn.lStructSize = sizeof(ofn);
-        ofn.hwndOwner = NULL; 
-        ofn.lpstrFilter = (LPWSTR)"Text Files\0*.txt\0Any File\0*.*\0";
-        ofn.lpstrFile = (LPWSTR)filename;
-        ofn.nMaxFile = MAX_PATH;
-        ofn.lpstrTitle = (LPWSTR)"Select a File!";
-        ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
+    OPENFILENAME ofn;
+    ZeroMemory(&filename, sizeof(filename));
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = NULL;
+    ofn.lpstrFilter = (LPWSTR)"Text Files\0*.txt\0Any File\0*.*\0";
+    ofn.lpstrFile = (LPWSTR)filename;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.lpstrTitle = (LPWSTR)"Select a File!";
+    ofn.Flags = OFN_DONTADDTORECENT | OFN_FILEMUSTEXIST;
 
-        if (GetOpenFileNameA((LPOPENFILENAMEA)&ofn))
+    if (GetOpenFileNameA((LPOPENFILENAMEA)&ofn))
+    {
+        std::cout << "You chose the file \"" << filename << "\"\n";
+        std::string filepath = filename;
+        replace(filepath.begin(), filepath.end(), '\\', '/');
+        return filename;
+    }
+    else
+    {
+        switch (CommDlgExtendedError())
         {
-            std::cout << "You chose the file \"" << filename << "\"\n";
-            std::string filepath = filename;
-            replace(filepath.begin(), filepath.end(), '\\', '/');
-            return filename;
+        case CDERR_DIALOGFAILURE: std::cout << "CDERR_DIALOGFAILURE\n";   break;
+        case CDERR_FINDRESFAILURE: std::cout << "CDERR_FINDRESFAILURE\n";  break;
+        case CDERR_INITIALIZATION: std::cout << "CDERR_INITIALIZATION\n";  break;
+        case CDERR_LOADRESFAILURE: std::cout << "CDERR_LOADRESFAILURE\n";  break;
+        case CDERR_LOADSTRFAILURE: std::cout << "CDERR_LOADSTRFAILURE\n";  break;
+        case CDERR_LOCKRESFAILURE: std::cout << "CDERR_LOCKRESFAILURE\n";  break;
+        case CDERR_MEMALLOCFAILURE: std::cout << "CDERR_MEMALLOCFAILURE\n"; break;
+        case CDERR_MEMLOCKFAILURE: std::cout << "CDERR_MEMLOCKFAILURE\n";  break;
+        case CDERR_NOHINSTANCE: std::cout << "CDERR_NOHINSTANCE\n";     break;
+        case CDERR_NOHOOK: std::cout << "CDERR_NOHOOK\n";          break;
+        case CDERR_NOTEMPLATE: std::cout << "CDERR_NOTEMPLATE\n";      break;
+        case CDERR_STRUCTSIZE: std::cout << "CDERR_STRUCTSIZE\n";      break;
+        case FNERR_BUFFERTOOSMALL: std::cout << "FNERR_BUFFERTOOSMALL\n";  break;
+        case FNERR_INVALIDFILENAME: std::cout << "FNERR_INVALIDFILENAME\n"; break;
+        case FNERR_SUBCLASSFAILURE: std::cout << "FNERR_SUBCLASSFAILURE\n"; break;
+        default: std::cout << "cancelled.\n";
         }
-        else
-        {
-                       switch (CommDlgExtendedError())
-            {
-            case CDERR_DIALOGFAILURE: std::cout << "CDERR_DIALOGFAILURE\n";   break;
-            case CDERR_FINDRESFAILURE: std::cout << "CDERR_FINDRESFAILURE\n";  break;
-            case CDERR_INITIALIZATION: std::cout << "CDERR_INITIALIZATION\n";  break;
-            case CDERR_LOADRESFAILURE: std::cout << "CDERR_LOADRESFAILURE\n";  break;
-            case CDERR_LOADSTRFAILURE: std::cout << "CDERR_LOADSTRFAILURE\n";  break;
-            case CDERR_LOCKRESFAILURE: std::cout << "CDERR_LOCKRESFAILURE\n";  break;
-            case CDERR_MEMALLOCFAILURE: std::cout << "CDERR_MEMALLOCFAILURE\n"; break;
-            case CDERR_MEMLOCKFAILURE: std::cout << "CDERR_MEMLOCKFAILURE\n";  break;
-            case CDERR_NOHINSTANCE: std::cout << "CDERR_NOHINSTANCE\n";     break;
-            case CDERR_NOHOOK: std::cout << "CDERR_NOHOOK\n";          break;
-            case CDERR_NOTEMPLATE: std::cout << "CDERR_NOTEMPLATE\n";      break;
-            case CDERR_STRUCTSIZE: std::cout << "CDERR_STRUCTSIZE\n";      break;
-            case FNERR_BUFFERTOOSMALL: std::cout << "FNERR_BUFFERTOOSMALL\n";  break;
-            case FNERR_INVALIDFILENAME: std::cout << "FNERR_INVALIDFILENAME\n"; break;
-            case FNERR_SUBCLASSFAILURE: std::cout << "FNERR_SUBCLASSFAILURE\n"; break;
-            default: std::cout << "cancelled.\n";
-            }
-        }
-    
-    return "" ;
+    }
+
+    return "";
 }
 
-char* saveFileTo(char* filename)
+char* saveFileTo(char* filename, char* filepath)
 {
+
+    OPENFILENAMEA ofn;
+
+    char szFileName[MAX_PATH] = "";
+    char filters[MAX_PATH] = { 0 };
+    char* post = strrchr(filename, '.');
+    char* ptr = filters;
+    sprintf(filters , "%s  ", post);
+    sprintf(filters + strlen(post) +3, "*%s", post);
+
     
+    
+
+    ZeroMemory(&ofn, sizeof(ofn));
+
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = NULL;
+    ofn.lpstrFilter = (LPCSTR) filters;
+    ofn.lpstrFile = (LPSTR)filename;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY;
+    ofn.lpstrDefExt = (LPCSTR)L"txt";
+    
+
+    if (GetSaveFileNameA((LPOPENFILENAMEA)&ofn)){
+       
+        std::string path = ofn.lpstrFile;
+        strcpy(filepath, path.c_str());
+    }
+    else
+    {
+        switch (CommDlgExtendedError())
+        {
+        case CDERR_DIALOGFAILURE: std::cout << "CDERR_DIALOGFAILURE\n";   break;
+        case CDERR_FINDRESFAILURE: std::cout << "CDERR_FINDRESFAILURE\n";  break;
+        case CDERR_INITIALIZATION: std::cout << "CDERR_INITIALIZATION\n";  break;
+        case CDERR_LOADRESFAILURE: std::cout << "CDERR_LOADRESFAILURE\n";  break;
+        case CDERR_LOADSTRFAILURE: std::cout << "CDERR_LOADSTRFAILURE\n";  break;
+        case CDERR_LOCKRESFAILURE: std::cout << "CDERR_LOCKRESFAILURE\n";  break;
+        case CDERR_MEMALLOCFAILURE: std::cout << "CDERR_MEMALLOCFAILURE\n"; break;
+        case CDERR_MEMLOCKFAILURE: std::cout << "CDERR_MEMLOCKFAILURE\n";  break;
+        case CDERR_NOHINSTANCE: std::cout << "CDERR_NOHINSTANCE\n";     break;
+        case CDERR_NOHOOK: std::cout << "CDERR_NOHOOK\n";          break;
+        case CDERR_NOTEMPLATE: std::cout << "CDERR_NOTEMPLATE\n";      break;
+        case CDERR_STRUCTSIZE: std::cout << "CDERR_STRUCTSIZE\n";      break;
+        case FNERR_BUFFERTOOSMALL: std::cout << "FNERR_BUFFERTOOSMALL\n";  break;
+        case FNERR_INVALIDFILENAME: std::cout << "FNERR_INVALIDFILENAME\n"; break;
+        case FNERR_SUBCLASSFAILURE: std::cout << "FNERR_SUBCLASSFAILURE\n"; break;
+        default: std::cout << "cancelled.\n";
+        }
+    }
+  
+    return nullptr;
 }
 
 void freeData(std::vector<fragment>& data)
@@ -135,19 +191,6 @@ std::vector<char>  requestPackets(Stream& stream)
     return missing;;
 }
 
-/*
-void freebuffer(stream *data)
-{
-    stream* ptr = data;
-    while (ptr) {
-        stream* prew = ptr;
-        ptr = ptr->next;
-        delete prew;
-    }
-    delete data;
-
-}
-*/
 void analyzeHeader(header& protocol, char* buffer) {
 
     ZeroMemory(&protocol, sizeof(protocol));

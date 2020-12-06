@@ -1,0 +1,144 @@
+Medziprocesova komunikacia (IPC)
+
+UDS - Unix Domain Socket
+Je to uzol, pomocou ktoreho si procesy mozu vymienat data, komuniacia prebieha prostrednictvom kernelu.
+Procesy mozu pouzit na adresovanie UDS suborovy system. Komunikuju tak, ze otvoria rovnaky UDS.
+
+Komunikacia je obojsmerna, moznost vyuzit pri klient-server komunikacii.
+
+Beej's Guide to Unix IPC
+Beej's Guide to Network Programming
+
+Typy UDS
+man 2 socket
+
+Priklady
+sudo apt-get install socat
+man socat
+
+# pre jednoduchy chat, otvorte nasledujuce prikazy v dvoch terminaloch
+socat UNIX-LISTEN:/tmp/chat.sock -
+socat UNIX:/tmp/chat.sock -
+
+# backdoor
+socat SYSTEM:bash UNIX-LISTEN:/tmp/back.sock
+
+Sietove sockety:
+Nepouzivaju kernel ale sietovy protokol.
+
+Priklady
+socat - TCP4:towel.blinkenlights.nl:23
+echo "GET /" | socat OPENSSL:www.dennikn.sk:443 -
+echo "GET /" | socat -d -d OPENSSL:www.fiit.stuba.sk:443 -
+
+Ulohy:
+Vytvorte dvojicu so spoluziakom a nadviazte jednoduchy chat ako v priklade vyssie ale s pouzitim sietovych socketov medzi Vasimi strojmi. 
+
+Analyzujte obsah suboru web.sh, v ktorom je implementacia jednoducheho webservera na demostraciu socketov.
+
+Spustite server pomocou nasledovneho prikazu:
+socat -d -d TCP-listen:8080,reuseaddr SYSTEM:./web.sh
+
+V inom terminali skuste viackrat vykonat nasledujuci prikaz:
+echo "GET /subor.txt HTTP/1.1" | socat TCP4:localhost:8080 -
+
+Spustite server pomocou nasledovneho prikazu:
+socat -d -d TCP-listen:8080,reuseaddr,fork SYSTEM:./web.sh 
+
+V inom terminali skuste viackrat vykonat nasledujuci prikaz:
+echo "GET /subor.txt HTTP/1.1" | socat TCP4:localhost:8080 -
+
+Spustite webserver nasledovne:
+socat -d -d TCP-listen:8080,reuseaddr SYSTEM:./webserver.sh &
+
+Pokuste sa vytvorit ssh tunel na webserver z Vasho hostovskeho stroja a vytvorte dopyt na subor.txt cez Vas oblubeny prehliadac.
+
+Upravte webserver tak, aby zobrazil zoznam suborov v aktualnom adresari ako prepojenia a po kliknuti v prehliadaci na subor sa zobrazi jeho obsah.
+
+Bonus:
+Zobrazte v prehliadaci informacie o procese, v ktorom sa prave vykonava webserver napriklad nasledovne:
+Moje PID:
+Meno pouzivatela, pod ktorym bezim:
+Port, na ktorom pocuvam:
+Pocet CPU jadier: XX
+Dostupna pamat RAM: XX MB
+Vyuzita pamat RAM: XX MB
+Pamat vyuzita na: XX %
+Server bezi: XX dni
+Verzia jadra OS: XX
+
+Vyssie uvedeny zoznam mozete rozsirit podla Vasho uvazenia.
+
+Pomocka: man 5 proc
+Medziprocesova komunikacia (IPC)
+
+UDS - Unix Domain Socket
+Je to uzol, pomocou ktoreho si procesy mozu vymienat data, komuniacia prebieha prostrednictvom kernelu.
+Procesy mozu pouzit na adresovanie UDS suborovy system. Komunikuju tak, ze otvoria rovnaky UDS.
+
+Komunikacia je obojsmerna, moznost vyuzit pri klient-server komunikacii.
+
+Beej's Guide to Unix IPC
+Beej's Guide to Network Programming
+
+Typy UDS
+man 2 socket
+
+Priklady
+sudo apt-get install socat
+man socat
+
+# pre jednoduchy chat, otvorte nasledujuce prikazy v dvoch terminaloch
+socat UNIX-LISTEN:/tmp/chat.sock -
+socat UNIX:/tmp/chat.sock -
+
+# backdoor
+socat SYSTEM:bash UNIX-LISTEN:/tmp/back.sock
+
+Sietove sockety:
+Nepouzivaju kernel ale sietovy protokol.
+
+Priklady
+socat - TCP4:towel.blinkenlights.nl:23
+echo "GET /" | socat OPENSSL:www.dennikn.sk:443 -
+echo "GET /" | socat -d -d OPENSSL:www.fiit.stuba.sk:443 -
+
+Ulohy:
+Vytvorte dvojicu so spoluziakom a nadviazte jednoduchy chat ako v priklade vyssie ale s pouzitim sietovych socketov medzi Vasimi strojmi. 
+
+Analyzujte obsah suboru web.sh, v ktorom je implementacia jednoducheho webservera na demostraciu socketov.
+
+Spustite server pomocou nasledovneho prikazu:
+socat -d -d TCP-listen:8080,reuseaddr SYSTEM:./web.sh
+
+V inom terminali skuste viackrat vykonat nasledujuci prikaz:
+echo "GET /subor.txt HTTP/1.1" | socat TCP4:localhost:8080 -
+
+Spustite server pomocou nasledovneho prikazu:
+socat -d -d TCP-listen:8080,reuseaddr,fork SYSTEM:./web.sh 
+
+V inom terminali skuste viackrat vykonat nasledujuci prikaz:
+echo "GET /subor.txt HTTP/1.1" | socat TCP4:localhost:8080 -
+
+Spustite webserver nasledovne:
+socat -d -d TCP-listen:8080,reuseaddr SYSTEM:./webserver.sh &
+
+Pokuste sa vytvorit ssh tunel na webserver z Vasho hostovskeho stroja a vytvorte dopyt na subor.txt cez Vas oblubeny prehliadac.
+
+Upravte webserver tak, aby zobrazil zoznam suborov v aktualnom adresari ako prepojenia a po kliknuti v prehliadaci na subor sa zobrazi jeho obsah.
+
+Bonus:
+Zobrazte v prehliadaci informacie o procese, v ktorom sa prave vykonava webserver napriklad nasledovne:
+Moje PID:
+Meno pouzivatela, pod ktorym bezim:
+Port, na ktorom pocuvam:
+Pocet CPU jadier: XX
+Dostupna pamat RAM: XX MB
+Vyuzita pamat RAM: XX MB
+Pamat vyuzita na: XX %
+Server bezi: XX dni
+Verzia jadra OS: XX
+
+Vyssie uvedeny zoznam mozete rozsirit podla Vasho uvazenia.
+
+Pomocka: man 5 proc

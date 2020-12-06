@@ -20,6 +20,7 @@
 std::mutex free_to_send_mtx;
 std::atomic<bool> ready;
 
+
 /// <summary>
 /// Keepalive funkcia je spustena vzdy po preneseni subou pre udrzanie spojenia medzi klientom a serverom.
 /// Keepalive spravy su posielane kazdych 15 sekund. Ak server neodpovie 3x po sebe, tak sa spojenie uzavrie.
@@ -52,35 +53,44 @@ void keepAlive(sockaddr_in hostsockaddr, SOCKET conectionsocket) {
     copyHeader(message, ka_message.header);
     
     while (ready.load()) {
+        
 
         //cakaj 15 sekund pred odoslanim spravy
-        std::this_thread::sleep_for(std::chrono::milliseconds(15000));
-        if (result = sendto(conectionsocket, message, HEADER_8, 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR) {
+        
 
-            std::cout << "Client : Connetion lost!... connection closed\n" << std::endl;
-            return;
+        for (int i = 0; i < 15 && ready.load(); i++) {
+            std::this_thread::sleep_for(std::chrono::seconds(1));
         }
 
-        if ((recvfrom(conectionsocket, (char*)recvbuf, 25, 0, (struct sockaddr*)&addr_in, &slen)) != SOCKET_ERROR){
-        
-            analyzeHeader(protocol, recvbuf);
-            
-            if (protocol.flags.ack) {
+        if (ready.load()) {
+            if (result = sendto(conectionsocket, message, HEADER_8, 0, (struct sockaddr*)&hostsockaddr, sizeof(hostsockaddr)) == SOCKET_ERROR && ready.load()) {
 
-                printf("Client : Connected to %s\n\n", inet_ntoa(addr_in.sin_addr));
-                timeouts = 0;
-                continue;
+                std::cout << "Client : Connetion lost!... connection closed\n" << std::endl;
+                return;
+            }
+
+            if ((recvfrom(conectionsocket, (char*)recvbuf, 25, 0, (struct sockaddr*)&addr_in, &slen)) != SOCKET_ERROR) {
+
+                analyzeHeader(protocol, recvbuf);
+
+                if (protocol.flags.ack) {
+
+                    printf("Client : Connected to %s\n\n", inet_ntoa(addr_in.sin_addr));
+                    timeouts = 0;
+                    continue;
+                }
+            }
+
+            //ak neprijmeme potvrdenie
+            timeouts++;
+            if (timeouts > 3) {
+                printf("Client : Connection lost!\n\n");
+                ready.store(false);
+                return;
             }
         }
-
-        //ak neprijmeme potvrdenie
-        timeouts++;
-        if (timeouts > 3) {
-            printf("Client : Connection lost!\n\n");
-            ready.store(false);
-            return;
-        }
     }
+    
 }
 
 /// <summary>
@@ -332,7 +342,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
         unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
 
         //Poskodenie dat datagramu
-        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket)
+        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket == 0)
         {
             change = *(msg.data + msg.header.type.len*4 + 3);
             *(msg.data + msg.header.type.len * 4 + 3) += 1;
@@ -343,6 +353,8 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
         
             std::cout << "Client : Failed to send data" << std::endl;
             ready.store(false);
+         
+
 
             if (listening.joinable())
                 listening.join();
@@ -356,7 +368,7 @@ int Sender::sendFile(std::string filePath, int fragmentLen, sockaddr_in hostsock
         }
        
         //Naprava poskodenej casti datagramu
-        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket) {
+        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket == 0) {
             *(msg.data + msg.header.type.len * 4 + 3) = change;
         }
 
@@ -508,7 +520,7 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
         unrecieved[msg.header.sequenceNumber] = msg.header.sequenceNumber;
 
         //Poskodenie dat datagramu
-        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket)
+        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket == 0)
         {
             change = *(msg.data + msg.header.type.len * 4 + 3);
             *(msg.data + msg.header.type.len * 4 + 3) += 1;
@@ -533,7 +545,7 @@ int Sender::sendMessage(std::string message, int fragmentLen, struct sockaddr_in
         }
 
         //Naprava poskodenej casti datagramu
-        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket) {
+        if (errPacket && msg.header.sequenceNumber && msg.header.sequenceNumber % errPacket == 0) {
             *(msg.data + msg.header.type.len * 4 + 3) = change;
         }
 
@@ -668,23 +680,17 @@ void Sender::wakeUp()
         printf("DEBUG : The Winsock dll found!\n");
 
         printf("DEBUG : The current status is: %s.\n", wsaData.szSystemStatus);
+       
 
     }
 
     if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2) 
     {
 
-        //Tell the user that we could not find a usable WinSock DLL
-
-        printf("DEBUG : The dll do not support the Winsock version %u.%u!\n",
-
-            LOBYTE(wsaData.wVersion), HIBYTE(wsaData.wVersion));
-
-        // When your application is finished call WSACleanup
+        printf("DEBUG : The dll do not support the Winsock version %u.%u!\n",LOBYTE(wsaData.wVersion), HIBYTE(wsaData.wVersion));
 
         WSACleanup();
 
-        // and exit
 
         return ;
 
@@ -702,9 +708,11 @@ void Sender::wakeUp()
 
             HIBYTE(wsaData.wHighVersion));
 
+      
         return ;
 
     }
+    
 }
 
 void Sender::run()
@@ -719,6 +727,10 @@ void Sender::run()
 
     SOCKET connectionSocket = INVALID_SOCKET;
     sockaddr_in host;
+
+    printf("==========================================================================\n");
+    printf("==================================CLIENT==================================\n\n");
+   
 
     host.sin_family = AF_INET;
     host.sin_addr.S_un.S_addr = hostsockaddr.sin_addr.s_addr;
@@ -736,52 +748,81 @@ void Sender::run()
         WSACleanup();
         return;
     }
+    int errPkt = 0, err = 0;
+    std::string data;
     std::thread keepAlive_t;
      while (true) {
         char choice;
 
-        std::cout << "help : [t] (text message) [f] (file) [e] (shutdown) [l] (nastav velkost fragmentu)" << std::endl;
+        std::cout << "help : [t] (text message) [f] (file) [s] (shutdown) [l] (nastav velkost fragmentu) [e] (vnesenie  chyby)" << std::endl;
         std::cin >> choice;
         std::string msg, filename;
-        int errPkt = 0;
-
+       
         switch (choice) {
-            case 't':
-                ready.store(false);
+        case 't':
+            ready.store(false);
 
-                if (keepAlive_t.joinable()) {
-                    keepAlive_t.join();
-                }
+            if (keepAlive_t.joinable()) {
+                keepAlive_t.join();
+            }
 
-                std::cout << "Message : ";
-                std::cin >> msg;
-                if(msg.size() > 0)
-                    _resullt = sendMessage(msg, fragment, hostsockaddr, connectionSocket, TEXTM);
+            _resullt = BAD_INPUT;
 
+            std::cout << "Message : ";
+            std::cin >> msg;
+            data.append(msg);
+            
+            std::getline(std::cin, msg, '\n');
+            data.append(msg);
+
+            if (msg.size() > 0)
+                _resullt = sendMessage(msg, fragment, hostsockaddr, connectionSocket, TEXTM);
+
+            if (_resullt > 0) {
                 keepAlive_t = std::thread(&keepAlive, hostsockaddr, connectionSocket);
-                break;
-            case 'f' :
-                ready.store(false);
+                printf("\nPOSLANYCH SPOLU : %d\n", _resullt);
+            }
+            data.erase();
+            break;
+        case 'f':
 
+            ready.store(false);
+     
+            _resullt = BAD_INPUT;
+                filename = getFilename();
+
+            
                 if (keepAlive_t.joinable()) {
                     keepAlive_t.join();
                 }
 
-                filename = getFilename();
                 
-                if (!filename.empty())//osetri otvaranie suboru
+                if (!filename.empty())
                     _resullt = connect(filename, fragment, hostsockaddr, connectionSocket);
 
-                if(_resullt > 0)
-                    _resullt = sendFile(filename, fragment, hostsockaddr, connectionSocket, errPkt);
-                if(_resullt > 0)
-                    keepAlive_t = std::thread(&keepAlive, hostsockaddr, connectionSocket);
+                if (_resullt > 0)
+                    _resullt += sendFile(filename, fragment, hostsockaddr, connectionSocket, errPkt);
 
+                if (_resullt > 0) {
+                    keepAlive_t = std::thread(&keepAlive, hostsockaddr, connectionSocket);
+                    printf("\nPOSLANYCH SPOLU : %d\n", _resullt);
+                }
+
+                
                 break;
             case 'l':
                 std::cin >> fragment;
                 break;
             case 'e':
+                printf("Zadaj cislo k ( kazdy k-ty fragment posielaneho suboru bude poskodeny): ");
+                std::cin >> err;
+                if (err)
+                    errPkt = err;
+                else
+                    errPkt = 0;
+
+                break;
+            case 's':
                 ready.store(false);
 
                 if (keepAlive_t.joinable()) {
